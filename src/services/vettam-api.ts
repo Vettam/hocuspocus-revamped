@@ -1,0 +1,200 @@
+import axios, { AxiosInstance, AxiosError } from "axios";
+import {
+  VettamAPIResponse,
+  AuthorizationRequest,
+  AuthorizationResponse,
+  DocumentLoadRequest,
+  DocumentSaveRequest,
+  SignedURLResponse,
+  Document,
+} from "../types";
+import { serverConfig } from "../config";
+import { logger } from "../config/logger";
+
+export class VettamAPIService {
+  private client: AxiosInstance;
+
+  constructor() {
+    this.client = axios.create({
+      baseURL: serverConfig.vettam.apiUrl,
+      timeout: serverConfig.vettam.timeout,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    // Response interceptor for error handling
+    this.client.interceptors.response.use(
+      (response) => response,
+      (error: AxiosError) => {
+        logger.error("Vettam API Error", {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url,
+        });
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  private getApiKey(): string {
+    return serverConfig.vettam.apiKey;
+  }
+
+  /**
+   * Check if a user is authorized to access a room
+   */
+  async authorizeUser(
+    request: AuthorizationRequest
+  ): Promise<AuthorizationResponse> {
+    try {
+      logger.debug("Authorizing user for room", { userId: request.userId });
+
+      const response = await this.client.post<
+        VettamAPIResponse<AuthorizationResponse>
+      >(
+        `/internal/drafts/${request.roomId}/check-access/`,
+        { user_id: request.userId },
+        { headers: { Authorization: `Bearer ${request.userJwt}` } }
+      );
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error || "Authorization failed");
+      }
+
+      logger.info("User authorization successful", {
+        userId: request.userId,
+        roomId: request.roomId,
+        access: response.data.data.access,
+        edit: response.data.data.edit,
+      });
+
+      return response.data.data;
+    } catch (error) {
+      logger.error("Failed to authorize user", {
+        request,
+        error: (error as Error).message,
+      });
+      throw new Error(`Authorization failed: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Get a signed URL to load a document
+   */
+  async getDocumentLoadURL(
+    request: DocumentLoadRequest
+  ): Promise<SignedURLResponse> {
+    try {
+      logger.debug("Getting document load URL", request);
+
+      const response = await this.client.post<
+        VettamAPIResponse<SignedURLResponse>
+      >("/v1/documents/load-url", request, {
+        headers: {
+          "api-key": this.getApiKey(),
+        },
+      });
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(
+          response.data.error || "Failed to get document load URL"
+        );
+      }
+
+      return response.data.data;
+    } catch (error) {
+      logger.error("Failed to get document load URL", {
+        request,
+        error: (error as Error).message,
+      });
+      throw new Error(
+        `Failed to get document load URL: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
+   * Load document content using signed URL
+   */
+  // TODO: Use S3 to get document here
+  async loadDocument(signedUrl: string): Promise<Document> {
+    try {
+      logger.debug("Loading document from signed URL");
+
+      const response = await axios.get<VettamAPIResponse<Document>>(signedUrl);
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(response.data.error || "Failed to load document");
+      }
+
+      logger.info("Document loaded successfully", {
+        documentId: response.data.data.id,
+      });
+      return response.data.data;
+    } catch (error) {
+      logger.error("Failed to load document", {
+        error: (error as Error).message,
+      });
+      throw new Error(`Failed to load document: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Get a signed URL to save a document
+   */
+  async saveDocumentSnapshot(
+    request: DocumentSaveRequest
+  ): Promise<SignedURLResponse> {
+    try {
+      logger.debug("Getting document save URL", {
+        documentId: request.documentId,
+        roomId: request.roomId,
+      });
+
+      const response = await this.client.post<
+        VettamAPIResponse<SignedURLResponse>
+      >(`/internal/drafts/${request.draftId}/snapshot/`, request, {
+        headers: {
+          "api-key": this.getApiKey(),
+        },
+      });
+
+      if (!response.data.success || !response.data.data) {
+        throw new Error(
+          response.data.error || "Failed to get document save URL"
+        );
+      }
+
+      return response.data.data;
+    } catch (error) {
+      logger.error("Failed to get document save URL", {
+        request,
+        error: (error as Error).message,
+      });
+      throw new Error(
+        `Failed to get document save URL: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
+   * Health check for the Vettam API
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      const response = await this.client.get("/v1/health");
+      return response.status === 200;
+    } catch (error) {
+      logger.warn("Vettam API health check failed", {
+        error: (error as Error).message,
+      });
+      return false;
+    }
+  }
+}
+
+// Export a singleton instance
+export const vettamAPI = new VettamAPIService();
+export default vettamAPI;
