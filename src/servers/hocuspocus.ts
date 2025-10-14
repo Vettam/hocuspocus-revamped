@@ -1,14 +1,14 @@
-import { Server } from '@hocuspocus/server';
-import { jwtVerify } from 'jose';
-import { serverConfig } from '../config';
-import { logger } from '../config/logger';
-import { vettamAPI } from '../services/vettam-api';
-import { documentService } from '../services/document';
-import { 
-  HocuspocusAuthPayload, 
+import { Server } from "@hocuspocus/server";
+import { jwtVerify } from "jose";
+import { serverConfig } from "../config";
+import { logger } from "../config/logger";
+import { vettamAPI } from "../services/vettam-api";
+import { documentService } from "../services/document";
+import {
+  HocuspocusAuthPayload,
   AuthContext,
-  AuthorizationRequest 
-} from '../types';
+  AuthorizationRequest,
+} from "../types";
 
 export class HocuspocusServer {
   private server: Server;
@@ -16,18 +16,20 @@ export class HocuspocusServer {
   constructor() {
     this.server = new Server({
       port: serverConfig.port.hocuspocus,
-      
+
       // Authentication hook
       onAuthenticate: async (data) => {
         try {
           const payload = await this.authenticateConnection(data);
-          logger.info('User authenticated for Hocuspocus', {
+          logger.info("User authenticated for Hocuspocus", {
             userId: payload.user.id,
             roomId: payload.roomId,
           });
           return payload;
         } catch (error) {
-          logger.error('Authentication failed', { error: (error as Error).message });
+          logger.error("Authentication failed", {
+            error: (error as Error).message,
+          });
           throw error;
         }
       },
@@ -36,17 +38,17 @@ export class HocuspocusServer {
       onLoadDocument: async (data) => {
         try {
           const { documentName } = data;
-          logger.debug('Loading document', { documentName });
-          
+          logger.debug("Loading document", { documentName });
+
           // Get the Yjs document from our document service
           const yDoc = documentService.getDocument(documentName);
-          
+
           // Return the document state
           return yDoc;
         } catch (error) {
-          logger.error('Failed to load document', { 
+          logger.error("Failed to load document", {
             documentName: data.documentName,
-            error: (error as Error).message 
+            error: (error as Error).message,
           });
           throw error;
         }
@@ -55,8 +57,8 @@ export class HocuspocusServer {
       // Document creation hook
       onCreateDocument: async (data) => {
         const { documentName } = data;
-        logger.debug('Document created', { documentName });
-        
+        logger.debug("Document created", { documentName });
+
         // Ensure document exists in our service
         documentService.getDocument(documentName);
       },
@@ -64,18 +66,18 @@ export class HocuspocusServer {
       // Connection established hook
       onConnect: async (data) => {
         const { documentName } = data;
-        logger.info('Client connected to document', { documentName });
+        logger.info("Client connected to document", { documentName });
       },
 
       // Connection closed hook
       onDisconnect: async (data) => {
         const { documentName } = data;
-        logger.info('Client disconnected from document', { documentName });
+        logger.info("Client disconnected from document", { documentName });
       },
 
       // Error handling
       onDestroy: async () => {
-        logger.info('Hocuspocus server is shutting down');
+        logger.info("Hocuspocus server is shutting down");
       },
     });
 
@@ -87,16 +89,16 @@ export class HocuspocusServer {
    * Authenticate a connection using JWT and Vettam API
    */
   private async authenticateConnection(data: any): Promise<AuthContext> {
-    const { token, documentName } = data.connection.readOnly 
+    const { token, documentName } = data.connection.readOnly
       ? { token: null, documentName: data.documentName }
       : this.parseAuthPayload(data);
 
     if (!token) {
-      throw new Error('Authentication token is required');
+      throw new Error("Authentication token is required");
     }
 
     if (!documentName) {
-      throw new Error('Document name is required');
+      throw new Error("Document name is required");
     }
 
     try {
@@ -105,7 +107,7 @@ export class HocuspocusServer {
       const { payload } = await jwtVerify(token, secret);
 
       if (!payload.sub) {
-        throw new Error('Invalid token: missing user ID');
+        throw new Error("Invalid token: missing user ID");
       }
 
       const userId = payload.sub as string;
@@ -113,29 +115,29 @@ export class HocuspocusServer {
 
       // Check authorization with Vettam API
       const authRequest: AuthorizationRequest = {
-        userId,
-        roomId,
-        action: 'write', // Default to write access
+        userId: userId,
+        roomId: roomId,
+        userJwt: token,
       };
 
       const authResponse = await vettamAPI.authorizeUser(authRequest);
 
-      if (!authResponse.authorized) {
-        throw new Error('User not authorized to access this room');
+      if (!authResponse.access) {
+        throw new Error("User not authorized to access this room");
       }
 
       // Return auth context
       const authContext: AuthContext = {
         user: authResponse.user,
-        roomId,
-        permissions: authResponse.permissions,
+        roomId: authResponse.room ? authResponse.room.id : roomId,
+        edit: authResponse.edit,
       };
 
       return authContext;
     } catch (error) {
-      logger.error('Authentication failed', { 
+      logger.error("Authentication failed", {
         error: (error as Error).message,
-        documentName 
+        documentName,
       });
       throw new Error(`Authentication failed: ${(error as Error).message}`);
     }
@@ -146,35 +148,37 @@ export class HocuspocusServer {
    */
   private parseAuthPayload(data: any): HocuspocusAuthPayload {
     const { request } = data;
-    
+
     // Try to get token from different sources
     let token: string | undefined;
-    
+
     // 1. From query parameters
     if (request.url) {
-      const url = new URL(request.url, 'http://localhost');
-      token = url.searchParams.get('token') || undefined;
+      const url = new URL(request.url, "http://localhost");
+      token = url.searchParams.get("token") || undefined;
     }
-    
+
     // 2. From headers
     if (!token && request.headers.authorization) {
       const authHeader = request.headers.authorization;
-      if (authHeader.startsWith('Bearer ')) {
+      if (authHeader.startsWith("Bearer ")) {
         token = authHeader.substring(7);
       }
     }
-    
+
     // 3. From WebSocket subprotocol (if available)
-    if (!token && request.headers['sec-websocket-protocol']) {
-      const protocols = request.headers['sec-websocket-protocol'].split(', ');
-      const tokenProtocol = protocols.find((p: string) => p.startsWith('token.'));
+    if (!token && request.headers["sec-websocket-protocol"]) {
+      const protocols = request.headers["sec-websocket-protocol"].split(", ");
+      const tokenProtocol = protocols.find((p: string) =>
+        p.startsWith("token.")
+      );
       if (tokenProtocol) {
         token = tokenProtocol.substring(6); // Remove 'token.' prefix
       }
     }
 
     if (!token) {
-      throw new Error('No authentication token found in request');
+      throw new Error("No authentication token found in request");
     }
 
     return {
@@ -190,9 +194,13 @@ export class HocuspocusServer {
   async start(): Promise<void> {
     try {
       await this.server.listen();
-      logger.info(`Hocuspocus server started on port ${serverConfig.port.hocuspocus}`);
+      logger.info(
+        `Hocuspocus server started on port ${serverConfig.port.hocuspocus}`
+      );
     } catch (error) {
-      logger.error('Failed to start Hocuspocus server', { error: (error as Error).message });
+      logger.error("Failed to start Hocuspocus server", {
+        error: (error as Error).message,
+      });
       throw error;
     }
   }
@@ -203,9 +211,11 @@ export class HocuspocusServer {
   async stop(): Promise<void> {
     try {
       await this.server.destroy();
-      logger.info('Hocuspocus server stopped');
+      logger.info("Hocuspocus server stopped");
     } catch (error) {
-      logger.error('Error stopping Hocuspocus server', { error: (error as Error).message });
+      logger.error("Error stopping Hocuspocus server", {
+        error: (error as Error).message,
+      });
       throw error;
     }
   }

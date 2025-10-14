@@ -1,4 +1,4 @@
-import { isDevelopment } from '../config';
+import { isDevelopment } from "../config";
 
 export enum LogLevel {
   ERROR = 0,
@@ -16,31 +16,31 @@ class Logger {
 
   private formatMessage(level: string, message: string, meta?: any): string {
     const timestamp = new Date().toISOString();
-    const metaString = meta ? ` ${JSON.stringify(meta)}` : '';
+    const metaString = meta ? ` ${JSON.stringify(meta)}` : "";
     return `[${timestamp}] ${level}: ${message}${metaString}`;
   }
 
   error(message: string, meta?: any): void {
     if (this.logLevel >= LogLevel.ERROR) {
-      console.error(this.formatMessage('ERROR', message, meta));
+      console.error(this.formatMessage("ERROR", message, meta));
     }
   }
 
   warn(message: string, meta?: any): void {
     if (this.logLevel >= LogLevel.WARN) {
-      console.warn(this.formatMessage('WARN', message, meta));
+      console.warn(this.formatMessage("WARN", message, meta));
     }
   }
 
   info(message: string, meta?: any): void {
     if (this.logLevel >= LogLevel.INFO) {
-      console.log(this.formatMessage('INFO', message, meta));
+      console.log(this.formatMessage("INFO", message, meta));
     }
   }
 
   debug(message: string, meta?: any): void {
     if (this.logLevel >= LogLevel.DEBUG) {
-      console.log(this.formatMessage('DEBUG', message, meta));
+      console.log(this.formatMessage("DEBUG", message, meta));
     }
   }
 }

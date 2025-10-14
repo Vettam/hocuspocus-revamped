@@ -26,7 +26,7 @@ export interface Document {
 export interface AuthContext {
   user: User;
   roomId: string;
-  permissions: string[];
+  edit: boolean;
 }
 
 export interface VettamAPIResponse<T = any> {
@@ -47,6 +47,7 @@ export interface DocumentSaveRequest {
   roomId: string;
   content: string;
   userId: string;
+  draftId: string;
 }
 
 export interface AuthorizationRequest {
