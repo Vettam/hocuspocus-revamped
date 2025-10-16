@@ -4,12 +4,12 @@ import {
   AuthorizationRequest,
   AuthorizationResponse,
   DocumentLoadRequest,
-  DocumentSaveRequest,
   SignedURLResponse,
   Document,
 } from "../types";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
+import FormData from "form-data";
 
 export class VettamAPIService {
   private client: AxiosInstance;
@@ -142,39 +142,104 @@ export class VettamAPIService {
   }
 
   /**
-   * Get a signed URL to save a document
+   * Load document content for a draft
    */
-  async saveDocumentSnapshot(
-    request: DocumentSaveRequest
-  ): Promise<SignedURLResponse> {
+  async loadDocumentFromDraft(draftId: string): Promise<string> {
     try {
-      logger.debug("Getting document save URL", {
-        documentId: request.documentId,
-        roomId: request.roomId,
-      });
+      logger.debug("Loading document from draft", { draftId });
 
       const response = await this.client.post<
-        VettamAPIResponse<SignedURLResponse>
-      >(`/internal/drafts/${request.draftId}/snapshot/`, request, {
-        headers: {
-          "api-key": this.getApiKey(),
-        },
-      });
+        VettamAPIResponse<{ url: string }>
+      >(
+        `/internal/realtime/drafts/${draftId}/load`,
+        {},
+        {
+          headers: {
+            "api-key": this.getApiKey(),
+          },
+        }
+      );
 
       if (!response.data.success || !response.data.data) {
         throw new Error(
-          response.data.error || "Failed to get document save URL"
+          response.data.error || "Failed to get document load URL"
         );
       }
 
-      return response.data.data;
+      // Fetch the document content from the signed URL
+      const contentResponse = await axios.get(response.data.data.url);
+      const content =
+        typeof contentResponse.data === "string"
+          ? contentResponse.data
+          : JSON.stringify(contentResponse.data);
+
+      logger.info("Document loaded from draft", {
+        draftId,
+        contentLength: content.length,
+      });
+
+      return content;
     } catch (error) {
-      logger.error("Failed to get document save URL", {
-        request,
+      logger.error("Failed to load document from draft", {
+        draftId,
         error: (error as Error).message,
       });
       throw new Error(
-        `Failed to get document save URL: ${(error as Error).message}`
+        `Failed to load document from draft: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /**
+   * Save document snapshot with multipart/form-data
+   */
+  async saveDocumentSnapshot(
+    draftId: string,
+    content: string,
+    checksum: string
+  ): Promise<void> {
+    try {
+      logger.debug("Saving document snapshot", { draftId, checksum });
+
+      const formData = new FormData();
+
+      // Create JSON blob
+      const contentBuffer = Buffer.from(content, "utf-8");
+      formData.append("file", contentBuffer, {
+        filename: "document.json",
+        contentType: "application/json",
+      });
+      formData.append("checksum", checksum);
+
+      const response = await this.client.post(
+        `/internal/realtime/drafts/${draftId}/snapshot`,
+        formData,
+        {
+          headers: {
+            "api-key": this.getApiKey(),
+            ...formData.getHeaders(),
+          },
+        }
+      );
+
+      if (!response.data.success) {
+        throw new Error(
+          response.data.error || "Failed to save document snapshot"
+        );
+      }
+
+      logger.info("Document snapshot saved", {
+        draftId,
+        checksum,
+      });
+    } catch (error) {
+      logger.error("Failed to save document snapshot", {
+        draftId,
+        checksum,
+        error: (error as Error).message,
+      });
+      throw new Error(
+        `Failed to save document snapshot: ${(error as Error).message}`
       );
     }
   }

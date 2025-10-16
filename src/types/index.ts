@@ -42,12 +42,8 @@ export interface DocumentLoadRequest {
   userId: string;
 }
 
-export interface DocumentSaveRequest {
-  documentId: string;
-  roomId: string;
-  content: string;
-  userId: string;
-  draftId: string;
+export interface RoomPreloadRequest {
+  mdFileUrl: string;
 }
 
 export interface AuthorizationRequest {
@@ -58,7 +54,7 @@ export interface AuthorizationRequest {
 
 export interface AuthorizationResponse {
   access: boolean;
-  edit: boolean
+  edit: boolean;
   user: User;
   room?: Room;
 }
@@ -66,19 +62,7 @@ export interface AuthorizationResponse {
 export interface SignedURLResponse {
   url: string;
   expiresAt: Date;
-  method: 'GET' | 'POST' | 'PUT';
-}
-
-export interface RefreshDocumentRequest {
-  roomId: string;
-  forceRefresh?: boolean;
-}
-
-export interface RefreshDocumentResponse {
-  success: boolean;
-  documentId?: string;
-  version?: number;
-  message?: string;
+  method: "GET" | "POST" | "PUT";
 }
 
 // Hocuspocus specific types
