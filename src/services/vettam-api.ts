@@ -214,9 +214,10 @@ export class VettamAPIService {
 
       const formData = new FormData();
 
-      // Create JSON blob
+      // Create JSON blob with proper filename
       const contentBuffer = Buffer.from(content, "utf-8");
       formData.append("file", contentBuffer, {
+        filename: "snapshot.json",
         contentType: "application/json",
       });
       formData.append("checksum", checksum);
@@ -231,8 +232,6 @@ export class VettamAPIService {
           },
         }
       );
-
-      console.log("MLEM: ", response.data);
 
       if (response.data.status != "success") {
         throw new Error(
