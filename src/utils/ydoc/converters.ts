@@ -82,7 +82,7 @@ function jsonToYDoc(
   json: string,
   ydoc: Y.Doc,
   schema: Schema,
-  fieldName: string = "shared"
+  fieldName: string = "default"
 ): void {
   try {
     const yXmlFragment = ydoc.getXmlFragment(fieldName);

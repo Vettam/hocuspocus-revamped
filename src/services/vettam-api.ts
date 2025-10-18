@@ -5,12 +5,14 @@ import {
   RoomAccessAuthorizationResponse,
   DocumentLoadRequest,
   SignedURLResponse,
-  Document,
 } from "../types";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import FormData from "form-data";
 import { createHash } from "node:crypto";
+import * as Y from "yjs";
+import { jsonToYDoc } from "../utils/ydoc/converters";
+import { schema } from "../utils/ydoc/schema";
 
 export class VettamAPIService {
   private client: AxiosInstance;
@@ -102,7 +104,7 @@ export class VettamAPIService {
 
       const response = await this.client.post<
         VettamAPIResponse<SignedURLResponse>
-      >("/v1/documents/load-url", request, {
+      >("/internal/drafts/${draft_id}/${version_id}/load/", request, {
         headers: {
           "api-key": this.getApiKey(),
         },
@@ -127,38 +129,12 @@ export class VettamAPIService {
   }
 
   /**
-   * Load document content using signed URL
-   */
-  // TODO: Use S3 to get document here
-  async loadDocument(signedUrl: string): Promise<Document> {
-    try {
-      logger.debug("Loading document from signed URL");
-
-      const response = await axios.get<VettamAPIResponse<Document>>(signedUrl);
-
-      if (response.data.status != "success" || !response.data.data) {
-        throw new Error(response.data.error || "Failed to load document");
-      }
-
-      logger.info("Document loaded successfully", {
-        documentId: response.data.data.id,
-      });
-      return response.data.data;
-    } catch (error) {
-      logger.error("Failed to load document", {
-        error: (error as Error).message,
-      });
-      throw new Error(`Failed to load document: ${(error as Error).message}`);
-    }
-  }
-
-  /**
    * Load document content for a draft
    */
   async loadDocumentFromDraft(
     draftId: string,
     versionId: string
-  ): Promise<string> {
+  ): Promise<Y.Doc> {
     try {
       logger.debug("Loading document from draft", { draftId });
 
@@ -178,17 +154,17 @@ export class VettamAPIService {
 
       // Fetch the document content from the signed URL
       const contentResponse = await axios.get(response.data.data.url);
-      const content =
-        typeof contentResponse.data === "string"
-          ? contentResponse.data
-          : JSON.stringify(contentResponse.data);
+      const content = contentResponse.data;
 
       logger.info("Document loaded from draft", {
         draftId,
         contentLength: content.length,
       });
 
-      return content;
+      var doc = new Y.Doc();
+      jsonToYDoc(content, doc, schema);
+
+      return doc;
     } catch (error) {
       logger.error("Failed to load document from draft", {
         draftId,

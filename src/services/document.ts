@@ -180,10 +180,10 @@ export class DocumentService {
       // Load document content from API
       const draftId = this.extractDraftId(roomId);
       const versionId = this.extractVersionId(roomId);
-      const content = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
+      const yDoc = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
 
       // Load content into Y.Doc
-      this.loadYjsDocument(doc, content);
+      doc = yDoc;
 
       logger.info("Document loaded from API", { roomId, draftId });
     } catch (error) {
