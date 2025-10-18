@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError } from "axios";
 import {
   VettamAPIResponse,
   AuthorizationRequest,
-  AuthorizationResponse,
+  RoomAccessAuthorizationResponse,
   DocumentLoadRequest,
   SignedURLResponse,
   Document,
@@ -10,6 +10,7 @@ import {
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import FormData from "form-data";
+import { createHash } from "node:crypto";
 
 export class VettamAPIService {
   private client: AxiosInstance;
@@ -39,7 +40,18 @@ export class VettamAPIService {
   }
 
   private getApiKey(): string {
-    return serverConfig.vettam.apiKey;
+    const year = new Date().getFullYear();
+    const month = new Date().getMonth() + 1;
+    const day = new Date().getDate();
+    const date = `${year}-${month.toString().padStart(2, "0")}-${day
+      .toString()
+      .padStart(2, "0")}`;
+
+    console.log("DATE: ", date);
+
+    return createHash("sha256")
+      .update(`${date}${serverConfig.vettam.apiKey}`, "utf8")
+      .digest("hex");
   }
 
   /**
@@ -47,28 +59,27 @@ export class VettamAPIService {
    */
   async authorizeUser(
     request: AuthorizationRequest
-  ): Promise<AuthorizationResponse> {
+  ): Promise<RoomAccessAuthorizationResponse> {
     try {
       logger.debug("Authorizing user for room", { userId: request.userId });
 
       const response = await this.client.post<
-        VettamAPIResponse<AuthorizationResponse>
+        VettamAPIResponse<RoomAccessAuthorizationResponse>
       >(
-        `/internal/drafts/${request.roomId}/check-access/`,
+        `/internal/drafts/${request.draftId}/${request.versionId}/check-access/`,
         { user_id: request.userId },
-        { headers: { Authorization: `Bearer ${request.userJwt}` } }
+        {
+          headers: {
+            "api-key": this.getApiKey(),
+          },
+        }
       );
 
-      if (!response.data.success || !response.data.data) {
+      if (response.data.status != "success" || !response.data.data) {
         throw new Error(response.data.error || "Authorization failed");
       }
 
-      logger.info("User authorization successful", {
-        userId: request.userId,
-        roomId: request.roomId,
-        access: response.data.data.access,
-        edit: response.data.data.edit,
-      });
+      logger.info("User authorization successful", response.data.data);
 
       return response.data.data;
     } catch (error) {
@@ -97,7 +108,7 @@ export class VettamAPIService {
         },
       });
 
-      if (!response.data.success || !response.data.data) {
+      if (response.data.status != "success" || !response.data.data) {
         throw new Error(
           response.data.error || "Failed to get document load URL"
         );
@@ -125,7 +136,7 @@ export class VettamAPIService {
 
       const response = await axios.get<VettamAPIResponse<Document>>(signedUrl);
 
-      if (!response.data.success || !response.data.data) {
+      if (response.data.status != "success" || !response.data.data) {
         throw new Error(response.data.error || "Failed to load document");
       }
 
@@ -144,23 +155,22 @@ export class VettamAPIService {
   /**
    * Load document content for a draft
    */
-  async loadDocumentFromDraft(draftId: string): Promise<string> {
+  async loadDocumentFromDraft(
+    draftId: string,
+    versionId: string
+  ): Promise<string> {
     try {
       logger.debug("Loading document from draft", { draftId });
 
       const response = await this.client.post<
         VettamAPIResponse<{ url: string }>
-      >(
-        `/internal/realtime/drafts/${draftId}/load`,
-        {},
-        {
-          headers: {
-            "api-key": this.getApiKey(),
-          },
-        }
-      );
+      >(`/internal/drafts/${draftId}/${versionId}/load/`, null, {
+        headers: {
+          "api-key": this.getApiKey(),
+        },
+      });
 
-      if (!response.data.success || !response.data.data) {
+      if (response.data.status != "success" || !response.data.data) {
         throw new Error(
           response.data.error || "Failed to get document load URL"
         );
@@ -195,6 +205,7 @@ export class VettamAPIService {
    */
   async saveDocumentSnapshot(
     draftId: string,
+    versionId: string,
     content: string,
     checksum: string
   ): Promise<void> {
@@ -211,8 +222,8 @@ export class VettamAPIService {
       });
       formData.append("checksum", checksum);
 
-      const response = await this.client.post(
-        `/internal/realtime/drafts/${draftId}/snapshot`,
+      const response = await this.client.post<VettamAPIResponse>(
+        `/internal/drafts/${draftId}/${versionId}/snapshot/`,
         formData,
         {
           headers: {
@@ -222,7 +233,9 @@ export class VettamAPIService {
         }
       );
 
-      if (!response.data.success) {
+      console.log("MLEM: ", response.data);
+
+      if (response.data.status != "success") {
         throw new Error(
           response.data.error || "Failed to save document snapshot"
         );

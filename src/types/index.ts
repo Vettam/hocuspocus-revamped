@@ -7,11 +7,9 @@ export interface User {
 }
 
 export interface Room {
-  id: string;
-  name?: string;
-  ownerId: string;
-  createdAt: Date;
-  updatedAt: Date;
+  room_id: string;
+  draft_id: string;
+  version_id: string;
 }
 
 export interface Document {
@@ -25,12 +23,12 @@ export interface Document {
 
 export interface AuthContext {
   user: User;
-  roomId: string;
+  room_id: string;
   edit: boolean;
 }
 
 export interface VettamAPIResponse<T = any> {
-  success: boolean;
+  status: string;
   data?: T;
   error?: string;
   message?: string;
@@ -50,13 +48,15 @@ export interface AuthorizationRequest {
   userJwt: string;
   userId: string;
   roomId: string;
+  draftId: string;
+  versionId: string;
 }
 
-export interface AuthorizationResponse {
+export interface RoomAccessAuthorizationResponse {
   access: boolean;
   edit: boolean;
   user: User;
-  room?: Room;
+  room: Room;
 }
 
 export interface SignedURLResponse {

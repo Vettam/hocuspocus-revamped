@@ -3,6 +3,7 @@ import * as crypto from "crypto";
 import { vettamAPI } from "./vettam-api";
 import { logger } from "../config/logger";
 import { AUTO_SAVE_INTERVAL } from "../config/constants";
+import { RegexMatcher } from "../utils/regex_matcher";
 
 export class DocumentService {
   private documents: Map<string, Y.Doc> = new Map();
@@ -10,16 +11,31 @@ export class DocumentService {
   private dirtyFlags: Map<string, boolean> = new Map();
 
   /**
-   * Extract draftId from roomId format: drafts-{draftId}-live
+   * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
   private extractDraftId(roomId: string): string {
-    const match = roomId.match(/^drafts-(.+)-live$/);
+    const uuidRegex = RegexMatcher.uuidRegex;
+    const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
       throw new Error(
-        `Invalid room ID format. Expected 'drafts-{draftId}-live', got: ${roomId}`
+        `Invalid room ID format. Expected '<uuid:draft_id>:<uuid:version_id>', got: ${roomId}`
       );
     }
     return match[1];
+  }
+
+  /**
+   * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
+   */
+  private extractVersionId(roomId: string): string {
+    const uuidRegex = RegexMatcher.uuidRegex;
+    const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
+    if (!match) {
+      throw new Error(
+        `Invalid room ID format. Expected '<uuid:draft_id>:<uuid:version_id>', got: ${roomId}`
+      );
+    }
+    return match[2];
   }
 
   /**
@@ -83,10 +99,16 @@ export class DocumentService {
       }
 
       const draftId = this.extractDraftId(roomId);
-      const content = this.serializeDocument(yDoc);
+      const versionId = this.extractVersionId(roomId);
+      const content = this.serializeDocument(new Y.Doc());
       const checksum = this.calculateChecksum(content);
 
-      await vettamAPI.saveDocumentSnapshot(draftId, content, checksum);
+      await vettamAPI.saveDocumentSnapshot(
+        draftId,
+        versionId,
+        content,
+        checksum
+      );
 
       // Reset dirty flag
       this.dirtyFlags.set(roomId, false);
@@ -141,7 +163,8 @@ export class DocumentService {
     try {
       // Load document content from API
       const draftId = this.extractDraftId(roomId);
-      const content = await vettamAPI.loadDocumentFromDraft(draftId);
+      const versionId = this.extractVersionId(roomId);
+      const content = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
 
       // Load content into Y.Doc
       this.loadYjsDocument(doc, content);

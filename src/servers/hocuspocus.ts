@@ -21,10 +21,7 @@ export class HocuspocusServer {
       onAuthenticate: async (data) => {
         try {
           const payload = await this.authenticateConnection(data);
-          logger.info("User authenticated for Hocuspocus", {
-            userId: payload.user.id,
-            roomId: payload.roomId,
-          });
+          logger.info("User authenticated for Hocuspocus", payload);
           return payload;
         } catch (error) {
           logger.error("Authentication failed", {
@@ -36,12 +33,16 @@ export class HocuspocusServer {
 
       // Document loading hook
       onLoadDocument: async (data) => {
+        console.log("onLoadDocument called with data:");
         try {
-          const { documentName } = data;
-          logger.debug("Loading document", { documentName });
+          const roomId = data.context.room_id;
+
+          logger.debug("Loading document for room id", roomId);
 
           // Get the Yjs document from our document service
-          const yDoc = documentService.getDocument(documentName);
+          const yDoc = await documentService.getDocument(roomId);
+
+          logger.info("Document loaded for Hocuspocus", { roomId });
 
           // Return the document state
           return yDoc;
@@ -73,6 +74,41 @@ export class HocuspocusServer {
       onDisconnect: async (data) => {
         const { documentName } = data;
         logger.info("Client disconnected from document", { documentName });
+
+        try {
+          const roomId = data.context?.room_id || data.documentName;
+          if (!roomId) {
+            logger.warn(
+              "No room id/document name available to persist on disconnect",
+              { data }
+            );
+            return;
+          }
+
+          logger.debug("Persisting document to storage on disconnect", {
+            roomId,
+          });
+
+          // Retrieve Yjs document from our document service
+          const yDoc = await documentService.getDocument(roomId);
+
+          if (!yDoc) {
+            logger.warn("No document found to persist", { roomId });
+            return;
+          }
+
+          // Persist the document state to storage (assumes documentService.saveDocument exists)
+          await documentService.saveSnapshot(roomId);
+
+          logger.info("Document persisted to storage on disconnect", {
+            roomId,
+          });
+        } catch (error) {
+          logger.error("Failed to persist document on disconnect", {
+            documentName: data.documentName,
+            error: (error as Error).message,
+          });
+        }
       },
 
       // Error handling
@@ -89,9 +125,7 @@ export class HocuspocusServer {
    * Authenticate a connection using JWT and Vettam API
    */
   private async authenticateConnection(data: any): Promise<AuthContext> {
-    const { token, documentName } = data.connection.readOnly
-      ? { token: null, documentName: data.documentName }
-      : this.parseAuthPayload(data);
+    const { token, documentName } = this.parseAuthPayload(data);
 
     if (!token) {
       throw new Error("Authentication token is required");
@@ -111,13 +145,20 @@ export class HocuspocusServer {
       }
 
       const userId = payload.sub as string;
-      const roomId = documentName; // Assuming documentName maps to roomId
+      const draftID = documentName.split(":")[0];
+      const versionId = documentName.split(":")[1];
+
+      if (!draftID || !versionId) {
+        throw new Error("Invalid document name format");
+      }
 
       // Check authorization with Vettam API
       const authRequest: AuthorizationRequest = {
         userId: userId,
-        roomId: roomId,
+        roomId: documentName, // Since were using the same input for room id
         userJwt: token,
+        draftId: draftID,
+        versionId: versionId,
       };
 
       const authResponse = await vettamAPI.authorizeUser(authRequest);
@@ -129,7 +170,7 @@ export class HocuspocusServer {
       // Return auth context
       const authContext: AuthContext = {
         user: authResponse.user,
-        roomId: authResponse.room ? authResponse.room.id : roomId,
+        room_id: authResponse.room.room_id,
         edit: authResponse.edit,
       };
 
@@ -175,6 +216,10 @@ export class HocuspocusServer {
       if (tokenProtocol) {
         token = tokenProtocol.substring(6); // Remove 'token.' prefix
       }
+    }
+
+    if (!token && data.token) {
+      token = data.token;
     }
 
     if (!token) {
