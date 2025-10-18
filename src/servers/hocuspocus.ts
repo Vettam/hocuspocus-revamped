@@ -70,6 +70,15 @@ export class HocuspocusServer {
         logger.info("Client connected to document", { documentName });
       },
 
+      afterLoadDocument: async (data) => {
+        // Attach update listener to persist changes in
+        // application memory
+        data.document.on("update", (update: Uint8Array) => {
+          const roomId = data.context?.room_id || data.documentName;
+          documentService.applyUpdate(roomId, update);
+        });
+      },
+
       // Connection closed hook
       onDisconnect: async (data) => {
         const { documentName } = data;
@@ -90,7 +99,7 @@ export class HocuspocusServer {
           });
 
           // Retrieve Yjs document from our document service
-          const yDoc = await documentService.getDocument(roomId);
+          const yDoc = documentService.getDocument(roomId);
 
           if (!yDoc) {
             logger.warn("No document found to persist", { roomId });
@@ -145,8 +154,8 @@ export class HocuspocusServer {
       }
 
       const userId = payload.sub as string;
-      const draftID = documentName.split(":")[0];
-      const versionId = documentName.split(":")[1];
+      const draftID = documentService.extractDraftId(documentName);
+      const versionId = documentService.extractVersionId(documentName);
 
       if (!draftID || !versionId) {
         throw new Error("Invalid document name format");
@@ -155,7 +164,7 @@ export class HocuspocusServer {
       // Check authorization with Vettam API
       const authRequest: AuthorizationRequest = {
         userId: userId,
-        roomId: documentName, // Since were using the same input for room id
+        roomId: documentName,
         userJwt: token,
         draftId: draftID,
         versionId: versionId,

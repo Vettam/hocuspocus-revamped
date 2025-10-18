@@ -4,16 +4,32 @@ import { vettamAPI } from "./vettam-api";
 import { logger } from "../config/logger";
 import { AUTO_SAVE_INTERVAL } from "../config/constants";
 import { RegexMatcher } from "../utils/regex_matcher";
+import { yDocToJSON } from "../utils/ydoc/converters";
+import { schema } from "../utils/ydoc/schema";
 
 export class DocumentService {
   private documents: Map<string, Y.Doc> = new Map();
   private saveTimers: Map<string, NodeJS.Timeout> = new Map();
   private dirtyFlags: Map<string, boolean> = new Map();
 
+  applyUpdate(roomId: string, update: Uint8Array): void {
+    console.log("Applying update to room:", roomId);
+    let yDoc = this.documents.get(roomId);
+    if (!yDoc) {
+      yDoc = new Y.Doc();
+      this.documents.set(roomId, yDoc);
+    }
+    Y.applyUpdate(yDoc, update);
+    this.onDocumentUpdate(roomId);
+    this.setupAutoSaveTimer(roomId);
+  }
+
+
+
   /**
    * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
-  private extractDraftId(roomId: string): string {
+   extractDraftId(roomId: string): string {
     const uuidRegex = RegexMatcher.uuidRegex;
     const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
@@ -27,7 +43,7 @@ export class DocumentService {
   /**
    * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
-  private extractVersionId(roomId: string): string {
+   extractVersionId(roomId: string): string {
     const uuidRegex = RegexMatcher.uuidRegex;
     const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
@@ -48,8 +64,8 @@ export class DocumentService {
   /**
    * Serialize Y.Doc to JSON string
    */
-  private serializeDocument(yDoc: Y.Doc): string {
-    const yMap = yDoc.getMap("document");
+ serializeDocument(yDoc: Y.Doc): string {
+    const yMap = yDoc.getXmlElement("default")
     const data: { [key: string]: any } = {};
 
     yMap.forEach((value, key) => {
@@ -100,7 +116,7 @@ export class DocumentService {
 
       const draftId = this.extractDraftId(roomId);
       const versionId = this.extractVersionId(roomId);
-      const content = this.serializeDocument(new Y.Doc());
+      const content = yDocToJSON(yDoc, schema, "default")
       const checksum = this.calculateChecksum(content);
 
       await vettamAPI.saveDocumentSnapshot(

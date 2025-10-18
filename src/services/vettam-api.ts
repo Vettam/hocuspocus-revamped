@@ -217,7 +217,6 @@ export class VettamAPIService {
       // Create JSON blob
       const contentBuffer = Buffer.from(content, "utf-8");
       formData.append("file", contentBuffer, {
-        filename: "document.json",
         contentType: "application/json",
       });
       formData.append("checksum", checksum);
