@@ -85,13 +85,18 @@ function jsonToYDoc(
   fieldName: string = "default"
 ): void {
   try {
-    const yXmlFragment = ydoc.getXmlFragment(fieldName);
-    yXmlFragment.delete(0, yXmlFragment.length);
+    // Wrap changes in a transaction to ensure proper synchronization
+    ydoc.transact(() => {
+      const yXmlFragment = ydoc.getXmlFragment(fieldName);
+      yXmlFragment.delete(0, yXmlFragment.length);
 
-    // Parse the JSON string into an object
-    const jsonObject = typeof json === 'string' ? JSON.parse(json) : json;
-    const pmNode = schema.nodeFromJSON(jsonObject);
-    prosemirrorToYXmlFragment(pmNode, yXmlFragment);
+      // Parse the JSON string into an object
+      const jsonObject = typeof json === 'string' ? JSON.parse(json) : json;
+      const pmNode = schema.nodeFromJSON(jsonObject);
+      prosemirrorToYXmlFragment(pmNode, yXmlFragment);
+    });
+    
+    console.log("YDoc transaction completed - changes should propagate to clients");
   } catch (error) {
     throw new Error(
       `Failed to convert JSON to YDoc: ${

@@ -19,7 +19,7 @@ stateRouter.get("/:id/state", async (req: Request, res: Response) => {
     logger.info("Getting room state as markdown", { roomId });
 
     // Get the YDoc for the room
-    const yDoc = await documentService.getDocument(roomId);
+    const yDoc = documentService.getDocument(roomId);
 
     // Convert YDoc to TipTap JSON using the schema
     const tiptapJsonString = yDocToJSON(yDoc, schema, "default");
@@ -94,11 +94,10 @@ stateRouter.patch("/:id/state", async (req: Request, res: Response) => {
     });
 
     // Get the YDoc for the room
-    const yDoc = await documentService.getDocument(roomId);
+    const yDoc = documentService.getDocument(roomId);
 
     // Convert TipTap JSON to YDoc using the schema
     jsonToYDoc(JSON.stringify(tiptapJson), yDoc, schema, "default");
-
     logger.info("TipTap JSON loaded into YDoc", { roomId });
 
     // Save the snapshot using documentService
