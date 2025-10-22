@@ -10,6 +10,7 @@ import indexRouter from "../routes/index";
 import healthRouter from "../routes/health";
 import catchAllRouter from "../routes/catch-all";
 import roomsRouter from "../routes/rooms";
+import stateRouter from "../routes/state";
 
 export class ExpressServer {
   private app: Express;
@@ -76,6 +77,9 @@ export class ExpressServer {
 
       // Load room routes
       this.app.use("/v1/room", roomsRouter);
+
+      // Load state routes
+      this.app.use("/v1/state", stateRouter);
 
       // Catch remaining
       this.app.use("*", catchAllRouter);
