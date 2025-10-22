@@ -38,22 +38,32 @@ export class DocumentService {
     try {
       const draftId = this.extractDraftId(roomId);
       const versionId = this.extractVersionId(roomId);
-      
-      logger.info("Loading initial state from API", { roomId, draftId, versionId });
-      
+
+      logger.info("Loading initial state from API", {
+        roomId,
+        draftId,
+        versionId,
+      });
+
       // Fetch the YDoc from the API
-      const loadedYDoc = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
-      
+      const loadedYDoc = await vettamAPI.loadDocumentFromDraft(
+        draftId,
+        versionId
+      );
+
       // Apply the loaded state to the Hocuspocus YDoc
       const stateVector = Y.encodeStateAsUpdate(loadedYDoc);
       Y.applyUpdate(yDoc, stateVector);
-      
+
       logger.info("Initial state loaded successfully", { roomId });
     } catch (error) {
-      logger.warn("Failed to load initial state from API, starting with empty document", {
-        roomId,
-        error: (error as Error).message,
-      });
+      logger.warn(
+        "Failed to load initial state from API, starting with empty document",
+        {
+          roomId,
+          error: (error as Error).message,
+        }
+      );
       // If loading fails, the document remains empty (which is fine)
     }
   }
@@ -70,12 +80,10 @@ export class DocumentService {
     this.setupAutoSaveTimer(roomId);
   }
 
-
-
   /**
    * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
-   extractDraftId(roomId: string): string {
+  extractDraftId(roomId: string): string {
     const uuidRegex = RegexMatcher.uuidRegex;
     const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
@@ -89,7 +97,7 @@ export class DocumentService {
   /**
    * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
-   extractVersionId(roomId: string): string {
+  extractVersionId(roomId: string): string {
     const uuidRegex = RegexMatcher.uuidRegex;
     const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
@@ -110,8 +118,8 @@ export class DocumentService {
   /**
    * Serialize Y.Doc to JSON string
    */
- serializeDocument(yDoc: Y.Doc): string {
-    const yMap = yDoc.getXmlElement("default")
+  serializeDocument(yDoc: Y.Doc): string {
+    const yMap = yDoc.getXmlElement("default");
     const data: { [key: string]: any } = {};
 
     yMap.forEach((value, key) => {
@@ -134,7 +142,7 @@ export class DocumentService {
 
       const draftId = this.extractDraftId(roomId);
       const versionId = this.extractVersionId(roomId);
-      const content = yDocToJSON(yDoc, schema, "default")
+      const content = yDocToJSON(yDoc, schema, "default");
       const checksum = this.calculateChecksum(content);
 
       await vettamAPI.saveDocumentSnapshot(

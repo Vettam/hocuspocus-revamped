@@ -9,7 +9,6 @@ import { APIErrorResponse } from "../types";
 import indexRouter from "../routes/index";
 import healthRouter from "../routes/health";
 import catchAllRouter from "../routes/catch-all";
-import roomsRouter from "../routes/rooms";
 import stateRouter from "../routes/state";
 
 export class ExpressServer {
@@ -74,9 +73,6 @@ export class ExpressServer {
 
       // Health check endpoint
       this.app.use("/health", healthRouter);
-
-      // Load room routes
-      this.app.use("/v1/room", roomsRouter);
 
       // Load state routes
       this.app.use("/v1/state", stateRouter);

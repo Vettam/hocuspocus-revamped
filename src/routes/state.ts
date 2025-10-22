@@ -90,7 +90,7 @@ stateRouter.patch("/:id/state", async (req: Request, res: Response) => {
     const tiptapJson = markdownToTiptapJson(content);
 
     logger.info("Markdown converted to TipTap JSON", {
-      tiptapJson
+      tiptapJson,
     });
 
     // Get the YDoc for the room
@@ -133,7 +133,7 @@ stateRouter.patch("/:id/state", async (req: Request, res: Response) => {
 
     const apiError: APIErrorResponse = {
       message: (error as Error).message || "Failed to update room state",
-        error: errorMessage,
+      error: errorMessage,
       statusCode,
       timestamp: new Date().toISOString(),
     };

@@ -36,7 +36,7 @@ export class HocuspocusServer {
       onLoadDocument: async (data) => {
         const roomId = data.context.room_id;
         logger.debug("onLoadDocument called for room", { roomId });
-        
+
         // Return undefined to let Hocuspocus create a new empty YDoc
         // We'll populate it in afterLoadDocument
         return undefined;
@@ -57,15 +57,17 @@ export class HocuspocusServer {
       // After document is loaded/created - load initial state and register
       afterLoadDocument: async (data) => {
         const roomId = data.context?.room_id || data.documentName;
-        
-        logger.info("afterLoadDocument called, registering document", { roomId });
-        
+
+        logger.info("afterLoadDocument called, registering document", {
+          roomId,
+        });
+
         // Register Hocuspocus's YDoc instance with our service
         documentService.registerHocuspocusDocument(roomId, data.document);
-        
+
         // Load initial state from API into this YDoc
         await documentService.loadInitialStateFromAPI(roomId, data.document);
-        
+
         logger.info("Document registered and initial state loaded", { roomId });
       },
 
