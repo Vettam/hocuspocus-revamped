@@ -9,7 +9,7 @@ import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
 import { documentService } from "../services/document";
 import { handleErrorResponse } from "../utils";
-import { apiKeyMiddleware, rateLimitMiddleware } from "../middleware";
+import { apiKeyMiddleware, rateLimitMiddleware, requestLoggingMiddleware } from "../middleware";
 import {
   HocuspocusAuthPayload,
   AuthContext,
@@ -188,15 +188,7 @@ export class ExpressServer {
     this.app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
     // Request logging middleware
-    this.app.use((req: Request, _res: Response, next: NextFunction) => {
-      logger.debug("HTTP Request", {
-        method: req.method,
-        url: req.url,
-        ip: req.ip,
-        userAgent: req.get("User-Agent"),
-      });
-      next();
-    });
+    this.app.use(requestLoggingMiddleware);
   }
 
   /**
