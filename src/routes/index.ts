@@ -14,7 +14,6 @@ indexRouter.get("/", (_req: Request, res: Response) => {
     version: process.env.npm_package_version || "1.0.0",
     endpoints: {
       health: "/health",
-      refresh: "/v1/room/:id/refresh",
     },
   });
 });

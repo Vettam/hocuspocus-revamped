@@ -9,7 +9,13 @@ import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
 import { documentService } from "../services/document";
-import { extractJWTFromRequest, getUserIdFromJWT, createRateLimitKey, handleErrorResponse } from "../utils";
+import {
+  extractJWTFromRequest,
+  getUserIdFromJWT,
+  createRateLimitKey,
+  handleErrorResponse,
+} from "../utils";
+import { apiKeyMiddleware } from "../middleware";
 import {
   HocuspocusAuthPayload,
   AuthContext,
@@ -134,7 +140,7 @@ export class ExpressServer {
     // Setup your express instance using the express-ws extension
     const { app } = expressWebsockets(express());
     this.app = app;
-    
+
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
@@ -168,15 +174,15 @@ export class ExpressServer {
         return createRateLimitKey(req);
       },
       message: {
-        error: 'Too Many Requests',
-        message: 'Rate limit exceeded. Try again later.',
+        error: "Too Many Requests",
+        message: "Rate limit exceeded. Try again later.",
         statusCode: 429,
       },
       standardHeaders: true,
       legacyHeaders: false,
       // Skip WebSocket upgrade requests
       skip: (req: Request) => {
-        return req.headers.upgrade === 'websocket';
+        return req.headers.upgrade === "websocket";
       },
     });
   }
@@ -186,26 +192,28 @@ export class ExpressServer {
    */
   private setupMiddleware(): void {
     // Security middleware with enhanced headers
-    this.app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          connectSrc: ["'self'", "wss:", "ws:"],
+    this.app.use(
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            connectSrc: ["'self'", "wss:", "ws:"],
+          },
         },
-      },
-      crossOriginEmbedderPolicy: false,
-    }));
+        crossOriginEmbedderPolicy: false,
+      })
+    );
 
     // Additional security headers
     this.app.use((_req: Request, res: Response, next: NextFunction) => {
-      res.setHeader('X-Frame-Options', 'DENY');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      res.setHeader("X-Frame-Options", "DENY");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
       next();
     });
 
     // CORS middleware with environment-based configuration
-    const corsOrigin = serverConfig.cors.origin
+    const corsOrigin = serverConfig.cors.origin;
 
     this.app.use(
       cors({
@@ -217,6 +225,10 @@ export class ExpressServer {
     // JWT-based rate limiting middleware for HTTP endpoints only
     // WebSocket connections are excluded as they use different upgrade mechanism
     this.app.use(this.createRateLimitMiddleware());
+
+    // API key authentication middleware
+    // Protects all endpoints except those in DEFAULT_OPEN_LOCATIONS
+    this.app.use(apiKeyMiddleware);
 
     // Body parsing middleware
     this.app.use(express.json({ limit: "10mb" }));
@@ -239,7 +251,7 @@ export class ExpressServer {
    */
   private setupRoutes(): void {
     console.log("Setting up websocket route for Hocuspocus");
-        // Add a websocket route for Hocuspocus
+    // Add a websocket route for Hocuspocus
     // You can set any contextual data like in the onConnect hook
     // and pass it to the handleConnection method.
     this.app.ws("/collaboration", (websocket: any, request: any) => {
@@ -248,11 +260,8 @@ export class ExpressServer {
       this.hocuspocus.handleConnection(websocket, request, context);
     });
 
-
     // Load modularized route modules
     this.loadRoutes();
-    
-
   }
 
   /**
@@ -301,10 +310,10 @@ export class ExpressServer {
       (err: any, req: Request, res: Response, _next: NextFunction) => {
         const context = {
           operation: `${req.method} ${req.path}`,
-          userId: req.headers['x-user-id'] as string,
-          correlationId: req.headers['x-correlation-id'] as string,
+          userId: req.headers["x-user-id"] as string,
+          correlationId: req.headers["x-correlation-id"] as string,
         };
-        
+
         handleErrorResponse(err, res, context);
       }
     );
@@ -370,7 +379,9 @@ export class ExpressServer {
           logger.info("Shutting down Hocuspocus instance...");
           // Hocuspocus will be cleaned up when the WebSocket server closes
           // No explicit destroy method available in current version
-          logger.info("Hocuspocus instance will be cleaned up with WebSocket server");
+          logger.info(
+            "Hocuspocus instance will be cleaned up with WebSocket server"
+          );
         } catch (error) {
           logger.error("Error shutting down Hocuspocus", {
             error: (error as Error).message,
