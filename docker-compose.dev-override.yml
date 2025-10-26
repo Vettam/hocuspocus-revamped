@@ -1,0 +1,20 @@
+services:
+  hocuspocus-backend:
+    ports:
+      - 3000:3000
+
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+
+      # Express REST API (HTTP)
+      - "traefik.http.routers.vettam-api.rule=Host(`api.vettam.local`)"
+      - "traefik.http.routers.vettam-api.entrypoints=web"
+      - "traefik.http.routers.vettam-api.service=vettam-api"
+      - "traefik.http.services.vettam-api.loadbalancer.server.port=3000"
+
+      # Hocuspocus WebSocket (HTTP)
+      - "traefik.http.routers.vettam-ws.rule=Host(`ws.vettam.local`)"
+      - "traefik.http.routers.vettam-ws.entrypoints=web"
+      - "traefik.http.routers.vettam-ws.service=vettam-ws"
+      - "traefik.http.services.vettam-ws.loadbalancer.server.port=1234"
