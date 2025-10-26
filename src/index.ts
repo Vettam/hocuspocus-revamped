@@ -1,6 +1,5 @@
 // Main exports for the Vettam Hocuspocus Backend
 export { default as VettamBackendServer } from "./server";
-export { default as HocuspocusServer } from "./servers/hocuspocus";
 export { default as ExpressServer } from "./servers/express";
 
 // Services
