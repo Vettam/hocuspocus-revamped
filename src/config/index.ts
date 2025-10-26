@@ -14,9 +14,9 @@ export const serverConfig: ServerConfig = {
     express: process.env.EXPRESS_HOST || "localhost",
   },
   cors: {
-    origin: process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",")
-      : ["http://localhost:3000"],
+    origin: process.env.DEBUG == "false"
+      ? (process.env.CORS_ORIGIN ?? "").split(",")
+      : ["*"],
     credentials: process.env.CORS_CREDENTIALS === "true",
   },
   vettam: {
@@ -31,11 +31,10 @@ export const serverConfig: ServerConfig = {
 };
 
 export const isDevelopment = process.env.NODE_ENV !== "production";
-export const isProduction = process.env.NODE_ENV === "production";
 
 // Validate required environment variables
 export function validateConfig(): void {
-  const requiredVars = ["JWT_SECRET", "VETTAM_API_URL"];
+  const requiredVars = ["JWT_SECRET", "VETTAM_API_URL", "VETTAM_API_KEY"];
 
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
@@ -43,6 +42,21 @@ export function validateConfig(): void {
     throw new Error(
       `Missing required environment variables: ${missingVars.join(", ")}`
     );
+  }
+
+  // Validate JWT secret strength
+  const jwtSecret = process.env.JWT_SECRET!;
+  if (jwtSecret.length < 32) {
+    throw new Error(
+      "JWT_SECRET must be at least 32 characters long for security"
+    );
+  }
+
+  // Validate ports are valid numbers
+  const expressPort = parseInt(process.env.EXPRESS_PORT || "3000", 10);
+  
+  if (isNaN(expressPort) || expressPort < 1 || expressPort > 65535) {
+    throw new Error("EXPRESS_PORT must be a valid port number (1-65535)");
   }
 }
 

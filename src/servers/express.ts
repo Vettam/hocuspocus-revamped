@@ -2,13 +2,14 @@ import express, { Request, Response, NextFunction } from "express";
 import expressWebsockets from "express-ws";
 import cors from "cors";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { Hocuspocus } from "@hocuspocus/server";
 import { jwtVerify } from "jose";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
-import { APIErrorResponse } from "../types";
 import { vettamAPI } from "../services/vettam-api";
 import { documentService } from "../services/document";
+import { extractJWTFromRequest, getUserIdFromJWT, createRateLimitKey, handleErrorResponse } from "../utils";
 import {
   HocuspocusAuthPayload,
   AuthContext,
@@ -140,20 +141,82 @@ export class ExpressServer {
   }
 
   /**
+   * Create JWT-based rate limiting middleware
+   */
+  private createRateLimitMiddleware() {
+    return rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: async (req: Request) => {
+        // Higher limits for authenticated users
+        const token = extractJWTFromRequest(req);
+        if (token) {
+          const userId = await getUserIdFromJWT(token);
+          if (userId) {
+            return 100; // 100 requests per 15 minutes for authenticated users
+          }
+        }
+        return 30; // 30 requests per 15 minutes for unauthenticated users
+      },
+      keyGenerator: async (req: Request) => {
+        const token = extractJWTFromRequest(req);
+        if (token) {
+          const userId = await getUserIdFromJWT(token);
+          if (userId) {
+            return createRateLimitKey(req, userId);
+          }
+        }
+        return createRateLimitKey(req);
+      },
+      message: {
+        error: 'Too Many Requests',
+        message: 'Rate limit exceeded. Try again later.',
+        statusCode: 429,
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+      // Skip WebSocket upgrade requests
+      skip: (req: Request) => {
+        return req.headers.upgrade === 'websocket';
+      },
+    });
+  }
+
+  /**
    * Setup Express middleware
    */
   private setupMiddleware(): void {
-    // Security middleware
-    this.app.use(helmet());
+    // Security middleware with enhanced headers
+    this.app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          connectSrc: ["'self'", "wss:", "ws:"],
+        },
+      },
+      crossOriginEmbedderPolicy: false,
+    }));
 
-    // CORS middleware
+    // Additional security headers
+    this.app.use((_req: Request, res: Response, next: NextFunction) => {
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+      next();
+    });
+
+    // CORS middleware with environment-based configuration
+    const corsOrigin = serverConfig.cors.origin
+
     this.app.use(
       cors({
-        origin: serverConfig.cors.origin,
-        //TODO: research on cors credentials
+        origin: corsOrigin,
         credentials: serverConfig.cors.credentials,
       })
     );
+
+    // JWT-based rate limiting middleware for HTTP endpoints only
+    // WebSocket connections are excluded as they use different upgrade mechanism
+    this.app.use(this.createRateLimitMiddleware());
 
     // Body parsing middleware
     this.app.use(express.json({ limit: "10mb" }));
@@ -233,25 +296,16 @@ export class ExpressServer {
    * Setup error handling middleware
    */
   private setupErrorHandling(): void {
-    // Global error handler
+    // Global error handler using standardized error handling
     this.app.use(
       (err: any, req: Request, res: Response, _next: NextFunction) => {
-        logger.error("Express server error", {
-          error: err.message,
-          stack: err.stack,
-          method: req.method,
-          url: req.url,
-        });
-
-        const statusCode = err.statusCode || err.status || 500;
-        const error: APIErrorResponse = {
-          error: err.name || "Internal Server Error",
-          message: err.message || "An unexpected error occurred",
-          statusCode,
-          timestamp: new Date().toISOString(),
+        const context = {
+          operation: `${req.method} ${req.path}`,
+          userId: req.headers['x-user-id'] as string,
+          correlationId: req.headers['x-correlation-id'] as string,
         };
-
-        res.status(statusCode).json(error);
+        
+        handleErrorResponse(err, res, context);
       }
     );
 
@@ -298,7 +352,33 @@ export class ExpressServer {
    * Stop the Express server
    */
   async stop(): Promise<void> {
+    // First, shut down document service
+    try {
+      logger.info("Shutting down document service...");
+      await documentService.shutdown();
+      logger.info("Document service shut down successfully");
+    } catch (error) {
+      logger.error("Error shutting down document service", {
+        error: (error as Error).message,
+      });
+    }
+
     return new Promise((resolve, reject) => {
+      // Then, gracefully shut down Hocuspocus
+      if (this.hocuspocus) {
+        try {
+          logger.info("Shutting down Hocuspocus instance...");
+          // Hocuspocus will be cleaned up when the WebSocket server closes
+          // No explicit destroy method available in current version
+          logger.info("Hocuspocus instance will be cleaned up with WebSocket server");
+        } catch (error) {
+          logger.error("Error shutting down Hocuspocus", {
+            error: (error as Error).message,
+          });
+        }
+      }
+
+      // Finally close the Express server
       if (this.server) {
         this.server.close((error?: Error) => {
           if (error) {
@@ -374,7 +454,6 @@ export class ExpressServer {
     } catch (error) {
       logger.error("Authentication failed", {
         error: (error as Error).message,
-        documentName,
       });
       throw new Error(`Authentication failed: ${(error as Error).message}`);
     }
