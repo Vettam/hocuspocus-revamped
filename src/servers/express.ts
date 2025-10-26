@@ -2,20 +2,14 @@ import express, { Request, Response, NextFunction } from "express";
 import expressWebsockets from "express-ws";
 import cors from "cors";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
 import { Hocuspocus } from "@hocuspocus/server";
 import { jwtVerify } from "jose";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
 import { documentService } from "../services/document";
-import {
-  extractJWTFromRequest,
-  getUserIdFromJWT,
-  createRateLimitKey,
-  handleErrorResponse,
-} from "../utils";
-import { apiKeyMiddleware } from "../middleware";
+import { handleErrorResponse } from "../utils";
+import { apiKeyMiddleware, rateLimitMiddleware } from "../middleware";
 import {
   HocuspocusAuthPayload,
   AuthContext,
@@ -147,47 +141,6 @@ export class ExpressServer {
   }
 
   /**
-   * Create JWT-based rate limiting middleware
-   */
-  private createRateLimitMiddleware() {
-    return rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: async (req: Request) => {
-        // Higher limits for authenticated users
-        const token = extractJWTFromRequest(req);
-        if (token) {
-          const userId = await getUserIdFromJWT(token);
-          if (userId) {
-            return 100; // 100 requests per 15 minutes for authenticated users
-          }
-        }
-        return 30; // 30 requests per 15 minutes for unauthenticated users
-      },
-      keyGenerator: async (req: Request) => {
-        const token = extractJWTFromRequest(req);
-        if (token) {
-          const userId = await getUserIdFromJWT(token);
-          if (userId) {
-            return createRateLimitKey(req, userId);
-          }
-        }
-        return createRateLimitKey(req);
-      },
-      message: {
-        error: "Too Many Requests",
-        message: "Rate limit exceeded. Try again later.",
-        statusCode: 429,
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-      // Skip WebSocket upgrade requests
-      skip: (req: Request) => {
-        return req.headers.upgrade === "websocket";
-      },
-    });
-  }
-
-  /**
    * Setup Express middleware
    */
   private setupMiddleware(): void {
@@ -223,8 +176,8 @@ export class ExpressServer {
     );
 
     // JWT-based rate limiting middleware for HTTP endpoints only
-    // WebSocket connections are excluded as they use different upgrade mechanism
-    this.app.use(this.createRateLimitMiddleware());
+    // WebSocket connections and health endpoints are excluded
+    this.app.use(rateLimitMiddleware);
 
     // API key authentication middleware
     // Protects all endpoints except those in DEFAULT_OPEN_LOCATIONS
