@@ -180,12 +180,7 @@ export class ExpressServer {
     // You can set any contextual data like in the onConnect hook
     // and pass it to the handleConnection method.
     this.app.ws("/collaboration", (websocket: any, request: any) => {
-      const context = {
-        user: {
-          id: 1234,
-          name: "Jane",
-        },
-      };
+      const context = {};
 
       this.hocuspocus.handleConnection(websocket, request, context);
     });
