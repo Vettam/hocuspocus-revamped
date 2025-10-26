@@ -47,16 +47,24 @@ export function markdownToTiptapJson(markdownContent: string) {
         i++; // Skip the inline token
       }
     } else if (token.type === "code_block") {
-      content.push({
+      const codeBlock: any = {
         type: "codeBlock",
-        content: [{ type: "text", text: token.content }],
-      });
+      };
+      // Only add content if there's actual text
+      if (token.content && token.content.length > 0) {
+        codeBlock.content = [{ type: "text", text: token.content }];
+      }
+      content.push(codeBlock);
     } else if (token.type === "fence") {
-      content.push({
+      const codeBlock: any = {
         type: "codeBlock",
         attrs: { language: token.info || null },
-        content: [{ type: "text", text: token.content }],
-      });
+      };
+      // Only add content if there's actual text
+      if (token.content && token.content.length > 0) {
+        codeBlock.content = [{ type: "text", text: token.content }];
+      }
+      content.push(codeBlock);
     } else if (token.type === "bullet_list_open") {
       const listItems = parseListItems(tokens, i);
       content.push({

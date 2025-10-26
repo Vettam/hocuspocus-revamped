@@ -31,37 +31,21 @@ export class HocuspocusServer {
         }
       },
 
-      // Document loading hook
+      // Document loading hook - Let Hocuspocus create the document
+      // We'll load the initial state in afterLoadDocument
       onLoadDocument: async (data) => {
-        console.log("onLoadDocument called with data:");
-        try {
-          const roomId = data.context.room_id;
+        const roomId = data.context.room_id;
+        logger.debug("onLoadDocument called for room", { roomId });
 
-          logger.debug("Loading document for room id", roomId);
-
-          // Get the Yjs document from our document service
-          const yDoc = await documentService.getDocument(roomId);
-
-          logger.info("Document loaded for Hocuspocus", { roomId });
-
-          // Return the document state
-          return yDoc;
-        } catch (error) {
-          logger.error("Failed to load document", {
-            documentName: data.documentName,
-            error: (error as Error).message,
-          });
-          throw error;
-        }
+        // Return undefined to let Hocuspocus create a new empty YDoc
+        // We'll populate it in afterLoadDocument
+        return undefined;
       },
 
       // Document creation hook
       onCreateDocument: async (data) => {
         const { documentName } = data;
         logger.debug("Document created", { documentName });
-
-        // Ensure document exists in our service
-        documentService.getDocument(documentName);
       },
 
       // Connection established hook
@@ -70,13 +54,21 @@ export class HocuspocusServer {
         logger.info("Client connected to document", { documentName });
       },
 
+      // After document is loaded/created - load initial state and register
       afterLoadDocument: async (data) => {
-        // Attach update listener to persist changes in
-        // application memory
-        data.document.on("update", (update: Uint8Array) => {
-          const roomId = data.context?.room_id || data.documentName;
-          documentService.applyUpdate(roomId, update);
+        const roomId = data.context?.room_id || data.documentName;
+
+        logger.info("afterLoadDocument called, registering document", {
+          roomId,
         });
+
+        // Register Hocuspocus's YDoc instance with our service
+        documentService.registerHocuspocusDocument(roomId, data.document);
+
+        // Load initial state from API into this YDoc
+        await documentService.loadInitialStateFromAPI(roomId, data.document);
+
+        logger.info("Document registered and initial state loaded", { roomId });
       },
 
       // Connection closed hook

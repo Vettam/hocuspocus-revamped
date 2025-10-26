@@ -12,6 +12,62 @@ export class DocumentService {
   private saveTimers: Map<string, NodeJS.Timeout> = new Map();
   private dirtyFlags: Map<string, boolean> = new Map();
 
+  /**
+   * Register a Hocuspocus document instance
+   * This ensures we use the same YDoc instance that Hocuspocus manages
+   */
+  registerHocuspocusDocument(roomId: string, yDoc: Y.Doc): void {
+    logger.info("Registering Hocuspocus document", { roomId });
+    this.documents.set(roomId, yDoc);
+    this.dirtyFlags.set(roomId, false);
+
+    // Set up document update listener
+    yDoc.on("update", () => {
+      this.onDocumentUpdate(roomId);
+    });
+
+    // Set up auto-save timer
+    this.setupAutoSaveTimer(roomId);
+  }
+
+  /**
+   * Load initial state from API into a YDoc
+   * This is called by Hocuspocus after a document is created
+   */
+  async loadInitialStateFromAPI(roomId: string, yDoc: Y.Doc): Promise<void> {
+    try {
+      const draftId = this.extractDraftId(roomId);
+      const versionId = this.extractVersionId(roomId);
+
+      logger.info("Loading initial state from API", {
+        roomId,
+        draftId,
+        versionId,
+      });
+
+      // Fetch the YDoc from the API
+      const loadedYDoc = await vettamAPI.loadDocumentFromDraft(
+        draftId,
+        versionId
+      );
+
+      // Apply the loaded state to the Hocuspocus YDoc
+      const stateVector = Y.encodeStateAsUpdate(loadedYDoc);
+      Y.applyUpdate(yDoc, stateVector);
+
+      logger.info("Initial state loaded successfully", { roomId });
+    } catch (error) {
+      logger.warn(
+        "Failed to load initial state from API, starting with empty document",
+        {
+          roomId,
+          error: (error as Error).message,
+        }
+      );
+      // If loading fails, the document remains empty (which is fine)
+    }
+  }
+
   applyUpdate(roomId: string, update: Uint8Array): void {
     console.log("Applying update to room:", roomId);
     let yDoc = this.documents.get(roomId);
@@ -24,12 +80,10 @@ export class DocumentService {
     this.setupAutoSaveTimer(roomId);
   }
 
-
-
   /**
    * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
-   extractDraftId(roomId: string): string {
+  extractDraftId(roomId: string): string {
     const uuidRegex = RegexMatcher.uuidRegex;
     const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
@@ -43,7 +97,7 @@ export class DocumentService {
   /**
    * Extract draftId from roomId format: <uuid:draft_id>:<uuid:version_id>
    */
-   extractVersionId(roomId: string): string {
+  extractVersionId(roomId: string): string {
     const uuidRegex = RegexMatcher.uuidRegex;
     const match = roomId.match(new RegExp(`^(${uuidRegex}):(${uuidRegex})$`));
     if (!match) {
@@ -64,8 +118,8 @@ export class DocumentService {
   /**
    * Serialize Y.Doc to JSON string
    */
- serializeDocument(yDoc: Y.Doc): string {
-    const yMap = yDoc.getXmlElement("default")
+  serializeDocument(yDoc: Y.Doc): string {
+    const yMap = yDoc.getXmlElement("default");
     const data: { [key: string]: any } = {};
 
     yMap.forEach((value, key) => {
@@ -73,34 +127,6 @@ export class DocumentService {
     });
 
     return JSON.stringify(data);
-  }
-
-  /**
-   * Load content into Y.Doc
-   */
-  private loadYjsDocument(yDoc: Y.Doc, content: string): void {
-    try {
-      const data = JSON.parse(content);
-      const yMap = yDoc.getMap("document");
-
-      // Clear existing content
-      yMap.clear();
-
-      // Set new content
-      Object.entries(data).forEach(([key, value]) => {
-        yMap.set(key, value);
-      });
-    } catch (error) {
-      // If content is not valid JSON, initialize empty document
-      logger.warn(
-        "Failed to parse document content, initializing empty document",
-        {
-          error: (error as Error).message,
-        }
-      );
-      const yMap = yDoc.getMap("document");
-      yMap.clear();
-    }
   }
 
   /**
@@ -116,7 +142,7 @@ export class DocumentService {
 
       const draftId = this.extractDraftId(roomId);
       const versionId = this.extractVersionId(roomId);
-      const content = yDocToJSON(yDoc, schema, "default")
+      const content = yDocToJSON(yDoc, schema, "default");
       const checksum = this.calculateChecksum(content);
 
       await vettamAPI.saveDocumentSnapshot(
@@ -164,54 +190,17 @@ export class DocumentService {
   }
 
   /**
-   * Get or create a Yjs document for a room
+   * Get a Yjs document for a room
+   * Note: Documents should be registered via registerHocuspocusDocument first
+   * This method is used by the REST API endpoints
    */
-  async getDocument(roomId: string): Promise<Y.Doc> {
-    // If document already exists in memory, return it
-    let doc = this.documents.get(roomId);
-    if (doc) {
-      return doc;
-    }
-
-    // Create new document
-    doc = new Y.Doc();
-
-    try {
-      // Load document content from API
-      const draftId = this.extractDraftId(roomId);
-      const versionId = this.extractVersionId(roomId);
-      const yDoc = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
-
-      // Load content into Y.Doc
-      doc = yDoc;
-
-      logger.info("Document loaded from API", { roomId, draftId });
-    } catch (error) {
-      // If loading fails, initialize empty document
-      logger.warn(
-        "Failed to load document from API, initializing empty document",
-        {
-          roomId,
-          error: (error as Error).message,
-        }
+  getDocument(roomId: string): Y.Doc {
+    const doc = this.documents.get(roomId);
+    if (!doc) {
+      throw new Error(
+        `Document not found for room: ${roomId}. Document must be loaded via WebSocket connection first.`
       );
-      this.loadYjsDocument(doc, "{}");
     }
-
-    // Store in memory
-    this.documents.set(roomId, doc);
-    this.dirtyFlags.set(roomId, false);
-
-    // Set up document update listener
-    doc.on("update", () => {
-      this.onDocumentUpdate(roomId);
-    });
-
-    // Set up auto-save timer
-    this.setupAutoSaveTimer(roomId);
-
-    logger.info("Document initialized in memory", { roomId });
-
     return doc;
   }
 

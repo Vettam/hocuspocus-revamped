@@ -3,4 +3,5 @@ export {
   removeHtmlComments,
   parseInlineContent,
   parseListItems,
-} from "./markdown-converter";
+} from "./converters/json-to-tiptap";
+export { tiptsapJsonToMarkdown } from "./converters/tiptap-to-json";

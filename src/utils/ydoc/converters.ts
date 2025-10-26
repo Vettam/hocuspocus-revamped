@@ -72,24 +72,33 @@ function yDocToJSON(
 
 /**
  * Convert Tiptap JSON to YDoc
- * @param json - Tiptap JSON object
+ * @param json - Tiptap JSON string or object
  * @param ydoc - The Y.js document to update
  * @param schema - ProseMirror schema
  * @param fieldName - The Y.XmlFragment field name
  * @throws Error if conversion fails
  */
 function jsonToYDoc(
-  json: string,
+  json: string | object,
   ydoc: Y.Doc,
   schema: Schema,
   fieldName: string = "default"
 ): void {
   try {
-    const yXmlFragment = ydoc.getXmlFragment(fieldName);
-    yXmlFragment.delete(0, yXmlFragment.length);
+    // Wrap changes in a transaction to ensure proper synchronization
+    ydoc.transact(() => {
+      const yXmlFragment = ydoc.getXmlFragment(fieldName);
+      yXmlFragment.delete(0, yXmlFragment.length);
 
-    const pmNode = schema.nodeFromJSON(json);
-    prosemirrorToYXmlFragment(pmNode, yXmlFragment);
+      // Parse the JSON string into an object
+      const jsonObject = typeof json === "string" ? JSON.parse(json) : json;
+      const pmNode = schema.nodeFromJSON(jsonObject);
+      prosemirrorToYXmlFragment(pmNode, yXmlFragment);
+    });
+
+    console.log(
+      "YDoc transaction completed - changes should propagate to clients"
+    );
   } catch (error) {
     throw new Error(
       `Failed to convert JSON to YDoc: ${
