@@ -1,6 +1,6 @@
-import { Request } from 'express';
-import { jwtVerify } from 'jose';
-import { serverConfig } from '../config';
+import { Request } from "express";
+import { jwtVerify } from "jose";
+import { serverConfig } from "../config";
 
 /**
  * Extract JWT token from request headers or query parameters
@@ -8,23 +8,18 @@ import { serverConfig } from '../config';
 export function extractJWTFromRequest(req: Request): string | null {
   // Try Authorization header first
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith("Bearer ")) {
     return authHeader.substring(7);
-  }
-
-  // Try query parameter as fallback
-  if (req.query.token && typeof req.query.token === 'string') {
-    return req.query.token;
   }
 
   return null;
 }
 
- /**
-  * Extract user ID from JWT token with full signature validation
-  * Returns null for invalid/expired tokens
-  * Used primarily for rate limiting
-  */
+/**
+ * Extract user ID from JWT token with full signature validation
+ * Returns null for invalid/expired tokens
+ * Used primarily for rate limiting
+ */
 export async function getUserIdFromJWT(token: string): Promise<string | null> {
   try {
     const secret = new TextEncoder().encode(serverConfig.jwt.secret);
