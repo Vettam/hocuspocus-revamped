@@ -100,5 +100,7 @@ export interface ServerConfig {
   jwt: {
     secret: string;
     algorithm: string;
+    audience: string;
+    issuer: string;
   };
 }

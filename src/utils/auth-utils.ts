@@ -23,7 +23,11 @@ export function extractJWTFromRequest(req: Request): string | null {
 export async function getUserIdFromJWT(token: string): Promise<string | null> {
   try {
     const secret = new TextEncoder().encode(serverConfig.jwt.secret);
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(token, secret, {
+      algorithms: [serverConfig.jwt.algorithm],
+      audience: serverConfig.jwt.audience,
+      issuer: serverConfig.jwt.issuer,
+    });
     return payload.sub || null;
   } catch (error) {
     // Return null for invalid tokens, let other middleware handle auth

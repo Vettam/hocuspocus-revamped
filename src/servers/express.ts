@@ -391,7 +391,11 @@ export class ExpressServer {
     try {
       // Verify JWT token
       const secret = new TextEncoder().encode(serverConfig.jwt.secret);
-      const { payload } = await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, secret, {
+        algorithms: [serverConfig.jwt.algorithm],
+        audience: serverConfig.jwt.audience,
+        issuer: serverConfig.jwt.issuer,
+      });
 
       if (!payload.sub) {
         throw new Error("Invalid token: missing user ID");

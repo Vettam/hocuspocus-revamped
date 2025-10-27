@@ -29,6 +29,8 @@ export const serverConfig: ServerConfig = {
   jwt: {
     secret: process.env.JWT_SECRET!,
     algorithm: process.env.JWT_ALGORITHM || "HS256",
+    audience: process.env.JWT_AUDIENCE || "authenticated",
+    issuer: process.env.JWT_ISSUER || "https://mekylkfyytkubdlsstmr.supabase.co/auth/v1",
   },
 };
 
