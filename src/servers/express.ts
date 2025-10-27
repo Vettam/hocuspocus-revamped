@@ -197,7 +197,7 @@ export class ExpressServer {
    * Setup Express routes
    */
   private setupRoutes(): void {
-    console.log("Setting up websocket route for Hocuspocus");
+    logger.debug("Setting up websocket route for Hocuspocus");
     // Add a websocket route for Hocuspocus
     // You can set any contextual data like in the onConnect hook
     // and pass it to the handleConnection method.

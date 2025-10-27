@@ -4,6 +4,7 @@ import {
   yXmlFragmentToProsemirror,
 } from "y-prosemirror";
 import { Schema } from "prosemirror-model";
+import logger from "../../config/logger";
 
 export interface TiptapJSON {
   type: "doc";
@@ -96,7 +97,7 @@ function jsonToYDoc(
       prosemirrorToYXmlFragment(pmNode, yXmlFragment);
     });
 
-    console.log(
+    logger.debug(
       "YDoc transaction completed - changes should propagate to clients"
     );
   } catch (error) {

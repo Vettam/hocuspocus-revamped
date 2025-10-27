@@ -13,7 +13,7 @@ export class DocumentService {
   private dirtyFlags: Map<string, boolean> = new Map();
   private lastAccessTimes: Map<string, number> = new Map();
   private cleanupTimer?: NodeJS.Timeout;
-  
+
   // Configuration for memory management
   private readonly DOCUMENT_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
   private readonly DOCUMENT_MAX_IDLE_TIME = 30 * 60 * 1000; // 30 minutes
@@ -35,7 +35,7 @@ export class DocumentService {
 
     // Set up auto-save timer
     this.setupAutoSaveTimer(roomId);
-    
+
     // Start cleanup timer if this is the first document
     if (this.documents.size === 1 && !this.cleanupTimer) {
       this.startCleanupTimer();
@@ -81,7 +81,7 @@ export class DocumentService {
   }
 
   applyUpdate(roomId: string, update: Uint8Array): void {
-    console.log("Applying update to room:", roomId);
+    logger.debug("Applying update to room:", roomId);
     let yDoc = this.documents.get(roomId);
     if (!yDoc) {
       yDoc = new Y.Doc();
@@ -214,10 +214,10 @@ export class DocumentService {
         `Document not found for room: ${roomId}. Document must be loaded via WebSocket connection first.`
       );
     }
-    
+
     // Update last access time
     this.lastAccessTimes.set(roomId, Date.now());
-    
+
     return doc;
   }
 
@@ -263,7 +263,7 @@ export class DocumentService {
     this.cleanupTimer = setInterval(() => {
       this.cleanupInactiveDocuments();
     }, this.DOCUMENT_CLEANUP_INTERVAL);
-    
+
     logger.info("Document cleanup timer started");
   }
 
@@ -288,7 +288,6 @@ export class DocumentService {
       count: inactiveRooms.length,
     });
 
-
     //TODO: notify clients about document unload
     for (const roomId of inactiveRooms) {
       try {
@@ -310,14 +309,12 @@ export class DocumentService {
     }
   }
 
-
-
   /**
    * Force cleanup of all documents (for shutdown)
    */
   async shutdown(): Promise<void> {
     logger.info("Shutting down document service...");
-    
+
     // Stop cleanup timer
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
