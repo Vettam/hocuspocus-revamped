@@ -1,4 +1,4 @@
-import { validateConfig } from "./config";
+import serverConfig, { validateConfig } from "./config";
 import { logger } from "./config/logger";
 import ExpressServer from "./servers/express";
 import { vettamAPI } from "./services/vettam-api";
@@ -37,9 +37,9 @@ class VettamBackendServer {
 
       logger.info("🚀 Vettam Backend Server started successfully!");
       logger.info("Server endpoints:", {
-        "REST API": "http://127.0.0.1:3000",
-        WebSocket: "ws://127.0.0.1:3000/collaboration",
-        "Health Check": "http://127.0.0.1:3000/health",
+       "REST API": `http://${serverConfig.host.express}:${serverConfig.port.express}`,
+       WebSocket: `ws://${serverConfig.host.express}:${serverConfig.port.express}/collaboration`,
+       "Health Check": `http://${serverConfig.host.express}:${serverConfig.port.express}/health`,
       });
     } catch (error) {
       logger.error("Failed to start server", {
