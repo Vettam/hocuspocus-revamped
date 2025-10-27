@@ -3,7 +3,7 @@ import { documentService } from "../services/document";
 import { logger } from "../config/logger";
 import { 
   markdownToTiptapJson, 
-  tiptsapJsonToMarkdown, 
+  tiptapJsonToMarkdown, 
   ErrorFactory,
   asyncHandler 
 } from "../utils";
@@ -39,7 +39,7 @@ stateRouter.get("/:id/state", asyncHandler(async (req: Request, res: Response) =
     });
 
     // Convert TipTap JSON to markdown
-    const markdownContent = tiptsapJsonToMarkdown(tiptapJson);
+    const markdownContent = tiptapJsonToMarkdown(tiptapJson);
 
     logger.info("TipTap JSON converted to markdown", {
       roomId,
