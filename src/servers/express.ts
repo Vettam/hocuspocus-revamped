@@ -139,6 +139,11 @@ export class ExpressServer {
     const { app } = expressWebsockets(express());
     this.app = app;
 
+    // Trust proxy headers (e.g., X-Forwarded-For) when behind a proxy
+    // Used to get the real IP of the client, especially when behind
+    // load balancers or reverse proxies
+    this.app.set("trust proxy", true);
+
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
