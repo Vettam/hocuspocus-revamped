@@ -20,10 +20,11 @@ export function extractJWTFromRequest(req: Request): string | null {
   return null;
 }
 
-/**
- * Extract user ID from JWT token without full validation
- * Used for rate limiting purposes only
- */
+ /**
+  * Extract user ID from JWT token with full signature validation
+  * Returns null for invalid/expired tokens
+  * Used primarily for rate limiting
+  */
 export async function getUserIdFromJWT(token: string): Promise<string | null> {
   try {
     const secret = new TextEncoder().encode(serverConfig.jwt.secret);
