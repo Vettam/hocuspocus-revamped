@@ -12,9 +12,13 @@ export const serverConfig: ServerConfig = {
     express: process.env.EXPRESS_HOST || "localhost",
   },
   cors: {
-    origin: process.env.DEBUG == "false"
-      ? (process.env.CORS_ORIGIN ?? "").split(",")
-      : ["*"],
+    origin:
+      process.env.DEBUG === "false"
+        ? (process.env.CORS_ORIGIN ?? "")
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : ["*"],
     credentials: process.env.CORS_CREDENTIALS === "true",
   },
   vettam: {
@@ -52,7 +56,7 @@ export function validateConfig(): void {
 
   // Validate ports are valid numbers
   const expressPort = parseInt(process.env.EXPRESS_PORT || "3000", 10);
-  
+
   if (isNaN(expressPort) || expressPort < 1 || expressPort > 65535) {
     throw new Error("EXPRESS_PORT must be a valid port number (1-65535)");
   }

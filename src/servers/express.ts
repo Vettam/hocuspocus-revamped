@@ -1,6 +1,5 @@
 import express, { Request, Response, NextFunction } from "express";
 import expressWebsockets from "express-ws";
-import cors from "cors";
 import helmet from "helmet";
 import { Hocuspocus } from "@hocuspocus/server";
 import { jwtVerify } from "jose";
@@ -9,7 +8,12 @@ import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
 import { documentService } from "../services/document";
 import { handleErrorResponse } from "../utils";
-import { apiKeyMiddleware, rateLimitMiddleware, requestLoggingMiddleware } from "../middleware";
+import {
+  apiKeyMiddleware,
+  rateLimitMiddleware,
+  requestLoggingMiddleware,
+  corsMiddleware,
+} from "../middleware";
 import {
   HocuspocusAuthPayload,
   AuthContext,
@@ -166,14 +170,7 @@ export class ExpressServer {
     });
 
     // CORS middleware with environment-based configuration
-    const corsOrigin = serverConfig.cors.origin;
-
-    this.app.use(
-      cors({
-        origin: corsOrigin,
-        credentials: serverConfig.cors.credentials,
-      })
-    );
+    this.app.use(corsMiddleware());
 
     // JWT-based rate limiting middleware for HTTP endpoints only
     // WebSocket connections and health endpoints are excluded
@@ -285,9 +282,9 @@ export class ExpressServer {
     return new Promise((resolve, reject) => {
       try {
         this.server = this.app.listen(serverConfig.port.express, () => {
-         logger.info(
-           `Express server with WebSocket started on port ${serverConfig.port.express}`
-         );
+          logger.info(
+            `Express server with WebSocket started on port ${serverConfig.port.express}`
+          );
           resolve();
         });
 
