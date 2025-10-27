@@ -9,21 +9,37 @@ import {
 } from "../utils";
 import { yDocToJSON, jsonToYDoc } from "../utils/ydoc/converters";
 import { schema } from "../utils/ydoc/schema";
+import { RegexMatcher } from "../utils/regex_matcher";
 
 const stateRouter = Router();
 
 /**
- * GET /room/:id/state
+ * GET /room/:draftId/:versionId/state
  * Get markdown content of room's YDoc (YDoc -> JSON -> Markdown)
  */
-stateRouter.get("/:id/state", asyncHandler(async (req: Request, res: Response) => {
-  const roomId = req.params.id;
+stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, res: Response) => {
+  const { draftId, versionId } = req.params;
 
-  if (!roomId || typeof roomId !== 'string') {
-    throw ErrorFactory.validation("Room ID is required and must be a valid string");
+  if (!draftId || typeof draftId !== 'string') {
+    throw ErrorFactory.validation("Draft ID is required and must be a valid string");
   }
 
-  logger.info("Getting room state as markdown", { roomId });
+  if (!RegexMatcher.matchUUID(draftId)) {
+    throw ErrorFactory.validation("Draft ID must be a valid UUID");
+  }
+
+  if (!versionId || typeof versionId !== 'string') {
+    throw ErrorFactory.validation("Version ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(versionId)) {
+    throw ErrorFactory.validation("Version ID must be a valid UUID");
+  }
+
+  // Construct roomId from draftId and versionId
+  const roomId = `${draftId}:${versionId}`;
+
+  logger.info("Getting room state as markdown", { roomId, draftId, versionId });
 
   try {
     // Get the YDoc for the room
@@ -62,24 +78,41 @@ stateRouter.get("/:id/state", asyncHandler(async (req: Request, res: Response) =
 }));
 
 /**
- * PATCH /room/:id/state
+ * PATCH /room/:draftId/:versionId/state
  * Update room's YDoc with markdown content (Markdown -> JSON -> YDoc)
  */
-stateRouter.patch("/:id/state", asyncHandler(async (req: Request, res: Response) => {
-  const roomId = req.params.id;
+stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request, res: Response) => {
+  const { draftId, versionId } = req.params;
   const { content } = req.body;
 
   // Validation
-  if (!roomId || typeof roomId !== 'string') {
-    throw ErrorFactory.validation("Room ID is required and must be a valid string");
+  if (!draftId || typeof draftId !== 'string') {
+    throw ErrorFactory.validation("Draft ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(draftId)) {
+    throw ErrorFactory.validation("Draft ID must be a valid UUID");
+  }
+
+  if (!versionId || typeof versionId !== 'string') {
+    throw ErrorFactory.validation("Version ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(versionId)) {
+    throw ErrorFactory.validation("Version ID must be a valid UUID");
   }
 
   if (typeof content !== "string") {
     throw ErrorFactory.validation("content is required and must be a string");
   }
 
+  // Construct roomId from draftId and versionId
+  const roomId = `${draftId}:${versionId}`;
+
   logger.info("Updating room state with markdown", {
     roomId,
+    draftId,
+    versionId,
     contentLength: content.length,
   });
 
