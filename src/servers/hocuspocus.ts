@@ -242,7 +242,7 @@ export class HocuspocusServer {
       await this.server.listen();
       // Both HTTP and WebSocket servers run on the same port
       logger.info(
-        `Hocuspocus server started on port ${serverConfig.host.express}`
+        `Hocuspocus server started on ${serverConfig.host.express}:${serverConfig.port.express}`
       );
     } catch (error) {
       logger.error("Failed to start Hocuspocus server", {
