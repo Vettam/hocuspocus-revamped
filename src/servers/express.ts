@@ -91,10 +91,20 @@ export class ExpressServer {
       // Connection closed hook
       onDisconnect: async (data) => {
         const { documentName } = data;
+        const roomId = data.context?.room_id || data.documentName;
+
         logger.info("Client disconnected from document", { documentName });
 
+        // If clients are still connected, skip saving snapshot
+        if (data.clientsCount !== 0) {
+          logger.info("Other clients still connected, skipping unregister", {
+            roomId,
+            clientsCount: data.clientsCount,
+          });
+          return;
+        }
+
         try {
-          const roomId = data.context?.room_id || data.documentName;
           if (!roomId) {
             logger.warn(
               "No room id/document name available to persist on disconnect",
@@ -119,6 +129,13 @@ export class ExpressServer {
           await documentService.saveSnapshot(roomId);
 
           logger.info("Document persisted to storage on disconnect", {
+            roomId,
+          });
+
+          // Unregister the document to free up resources
+          await data.instance.unloadDocument(data.document);
+          await documentService.removeDocument(roomId);
+          logger.info("Document unregistered and resources cleaned up", {
             roomId,
           });
         } catch (error) {
