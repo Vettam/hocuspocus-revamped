@@ -2,21 +2,13 @@ import * as Y from "yjs";
 import * as crypto from "crypto";
 import { vettamAPI } from "./vettam-api";
 import { logger } from "../config/logger";
-import { AUTO_SAVE_INTERVAL } from "../config/constants";
 import { RegexMatcher } from "../utils/regex_matcher";
 import { yDocToJSON } from "../utils/ydoc/converters";
 import { schema } from "../utils/ydoc/schema";
 
 export class DocumentService {
   private documents: Map<string, Y.Doc> = new Map();
-  private saveTimers: Map<string, NodeJS.Timeout> = new Map();
   private dirtyFlags: Map<string, boolean> = new Map();
-  private lastAccessTimes: Map<string, number> = new Map();
-  private cleanupTimer?: NodeJS.Timeout;
-
-  // Configuration for memory management
-  private readonly DOCUMENT_CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
-  private readonly DOCUMENT_MAX_IDLE_TIME = 30 * 60 * 1000; // 30 minutes
 
   /**
    * Register a Hocuspocus document instance
@@ -26,20 +18,11 @@ export class DocumentService {
     logger.info("Registering Hocuspocus document", { roomId });
     this.documents.set(roomId, yDoc);
     this.dirtyFlags.set(roomId, false);
-    this.lastAccessTimes.set(roomId, Date.now());
 
     // Set up document update listener
     yDoc.on("update", () => {
       this.onDocumentUpdate(roomId);
     });
-
-    // Set up auto-save timer
-    this.setupAutoSaveTimer(roomId);
-
-    // Start cleanup timer if this is the first document
-    if (this.documents.size === 1 && !this.cleanupTimer) {
-      this.startCleanupTimer();
-    }
   }
 
   /**
@@ -89,7 +72,6 @@ export class DocumentService {
     }
     Y.applyUpdate(yDoc, update);
     this.onDocumentUpdate(roomId);
-    this.setupAutoSaveTimer(roomId);
   }
 
   /**
@@ -177,29 +159,10 @@ export class DocumentService {
   }
 
   /**
-   * Set up auto-save timer for a room
-   */
-  private setupAutoSaveTimer(roomId: string): void {
-    // Clear existing timer if any
-    const existingTimer = this.saveTimers.get(roomId);
-    if (existingTimer) {
-      clearInterval(existingTimer);
-    }
-
-    // Set up new timer
-    const timer = setInterval(() => {
-      this.saveSnapshot(roomId);
-    }, AUTO_SAVE_INTERVAL);
-
-    this.saveTimers.set(roomId, timer);
-  }
-
-  /**
-   * Handle document updates - mark as dirty and update access time
+   * Handle document updates - mark as dirty
    */
   private onDocumentUpdate(roomId: string): void {
     this.dirtyFlags.set(roomId, true);
-    this.lastAccessTimes.set(roomId, Date.now());
   }
 
   /**
@@ -215,9 +178,6 @@ export class DocumentService {
       );
     }
 
-    // Update last access time
-    this.lastAccessTimes.set(roomId, Date.now());
-
     return doc;
   }
 
@@ -228,13 +188,6 @@ export class DocumentService {
     // Save snapshot before removing
     await this.saveSnapshot(roomId);
 
-    // Clear timer
-    const timer = this.saveTimers.get(roomId);
-    if (timer) {
-      clearInterval(timer);
-      this.saveTimers.delete(roomId);
-    }
-
     // Destroy and remove document
     const doc = this.documents.get(roomId);
     if (doc) {
@@ -244,7 +197,6 @@ export class DocumentService {
 
     // Clean up all tracking data
     this.dirtyFlags.delete(roomId);
-    this.lastAccessTimes.delete(roomId);
 
     logger.info("Document removed from memory", { roomId });
   }
@@ -257,69 +209,10 @@ export class DocumentService {
   }
 
   /**
-   * Start the cleanup timer for inactive documents
-   */
-  private startCleanupTimer(): void {
-    this.cleanupTimer = setInterval(() => {
-      this.cleanupInactiveDocuments();
-    }, this.DOCUMENT_CLEANUP_INTERVAL);
-
-    logger.info("Document cleanup timer started");
-  }
-
-  /**
-   * Clean up inactive documents to prevent memory leaks
-   */
-  private async cleanupInactiveDocuments(): Promise<void> {
-    const now = Date.now();
-    const inactiveRooms: string[] = [];
-
-    for (const [roomId, lastAccess] of this.lastAccessTimes) {
-      if (now - lastAccess > this.DOCUMENT_MAX_IDLE_TIME) {
-        inactiveRooms.push(roomId);
-      }
-    }
-
-    if (inactiveRooms.length === 0) {
-      return;
-    }
-
-    logger.info("Cleaning up inactive documents", {
-      count: inactiveRooms.length,
-    });
-
-    //TODO: notify clients about document unload
-    for (const roomId of inactiveRooms) {
-      try {
-        await this.removeDocument(roomId);
-        logger.info("Inactive document cleaned up", { roomId });
-      } catch (error) {
-        logger.error("Failed to clean up inactive document", {
-          roomId,
-          error: (error as Error).message,
-        });
-      }
-    }
-
-    // Stop cleanup timer if no documents remain
-    if (this.documents.size === 0 && this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = undefined;
-      logger.info("Document cleanup timer stopped - no active documents");
-    }
-  }
-
-  /**
    * Force cleanup of all documents (for shutdown)
    */
   async shutdown(): Promise<void> {
     logger.info("Shutting down document service...");
-
-    // Stop cleanup timer
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer);
-      this.cleanupTimer = undefined;
-    }
 
     // Save and remove all documents
     const roomIds = Array.from(this.documents.keys());
