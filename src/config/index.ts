@@ -6,11 +6,9 @@ config();
 
 export const serverConfig: ServerConfig = {
   port: {
-    hocuspocus: parseInt(process.env.HOCUSPOCUS_PORT || "1234", 10),
     express: parseInt(process.env.EXPRESS_PORT || "3000", 10),
   },
   host: {
-    hocuspocus: process.env.HOCUSPOCUS_HOST || "localhost",
     express: process.env.EXPRESS_HOST || "localhost",
   },
   cors: {

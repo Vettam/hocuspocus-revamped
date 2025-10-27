@@ -15,7 +15,7 @@ export class HocuspocusServer {
 
   constructor() {
     this.server = new Server({
-      port: serverConfig.port.hocuspocus,
+      port: serverConfig.port.express,
 
       // Authentication hook
       onAuthenticate: async (data) => {
@@ -240,8 +240,9 @@ export class HocuspocusServer {
   async start(): Promise<void> {
     try {
       await this.server.listen();
+      // Both HTTP and WebSocket servers run on the same port
       logger.info(
-        `Hocuspocus server started on port ${serverConfig.port.hocuspocus}`
+        `Hocuspocus server started on port ${serverConfig.host.express}`
       );
     } catch (error) {
       logger.error("Failed to start Hocuspocus server", {

@@ -50,7 +50,7 @@ export function createRateLimitMiddleware() {
       }
 
       // Skip health endpoints
-      if (req.path.startsWith("/health/")) {
+      if (req.path === "/health" || req.path.startsWith("/health/")) {
         return true;
       }
 
