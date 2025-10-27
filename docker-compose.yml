@@ -21,6 +21,10 @@ services:
       - "traefik.http.routers.vettam-api-secure.tls=true"
       - "traefik.http.routers.vettam-api-secure.service=vettam-api"
 
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+
 networks:
   hocuspocus-network:
     driver: bridge
