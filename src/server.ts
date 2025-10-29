@@ -35,11 +35,17 @@ class VettamBackendServer {
       // Start Express server with integrated WebSocket
       await this.expressServer.start();
 
+      // Log server endpoints
+      const publicHost = serverConfig.host.publicHost;
+      const port = serverConfig.port.express;
+      
       logger.info("🚀 Vettam Backend Server started successfully!");
       logger.info("Server endpoints:", {
-        "REST API": `http://${serverConfig.host.express}:${serverConfig.port.express}`,
-        WebSocket: `ws://${serverConfig.host.express}:${serverConfig.port.express}/collaboration`,
-        "Health Check": `http://${serverConfig.host.express}:${serverConfig.port.express}/health`,
+        "Public Host": publicHost,
+        "Internal Bind": `0.0.0.0:${port}`,
+        "REST API": `http://${publicHost}:${port}`,
+        "WebSocket": `ws://${publicHost}:${port}/collaboration`,
+        "Health Check": `http://${publicHost}:${port}/health`,
       });
     } catch (error) {
       logger.error("Failed to start server", {

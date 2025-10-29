@@ -9,7 +9,11 @@ export const serverConfig: ServerConfig = {
     express: parseInt(process.env.EXPRESS_PORT || "3000", 10),
   },
   host: {
-    express: process.env.EXPRESS_HOST || "localhost",
+    // For display/logging purposes only (e.g., in Docker labels, health checks)
+    // The application always binds to 0.0.0.0 internally
+    // Set PUBLIC_HOST to your actual domain (e.g., collaboration.api.vettam.app)
+    publicHost: process.env.PUBLIC_HOST!,
+    bindHost: "0.0.0.0"
   },
   cors: {
     origin:
@@ -30,7 +34,7 @@ export const serverConfig: ServerConfig = {
     secret: process.env.JWT_SECRET!,
     algorithm: process.env.JWT_ALGORITHM || "HS256",
     audience: process.env.JWT_AUDIENCE || "authenticated",
-    issuer: process.env.JWT_ISSUER || "https://mekylkfyytkubdlsstmr.supabase.co/auth/v1",
+    issuer: process.env.JWT_ISSUER!,
   },
 };
 
@@ -38,7 +42,13 @@ export const isDevelopment = process.env.NODE_ENV !== "production";
 
 // Validate required environment variables
 export function validateConfig(): void {
-  const requiredVars = ["JWT_SECRET", "VETTAM_API_URL", "VETTAM_API_KEY"];
+  const requiredVars = [
+    "JWT_SECRET",
+    "VETTAM_API_URL",
+    "VETTAM_API_KEY",
+    "JWT_ISSUER",
+    "PUBLIC_HOST",
+  ];
 
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 

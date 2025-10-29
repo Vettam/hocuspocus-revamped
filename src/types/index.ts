@@ -86,7 +86,8 @@ export interface ServerConfig {
     express: number;
   };
   host: {
-    express: string;
+    publicHost: string;
+    bindHost: string;
   };
   cors: {
     origin: string | string[] | boolean;

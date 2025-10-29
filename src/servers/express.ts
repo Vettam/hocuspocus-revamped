@@ -264,9 +264,12 @@ export class ExpressServer {
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.server = this.app.listen(serverConfig.port.express, () => {
+        const host = serverConfig.host.bindHost;
+        const port = serverConfig.port.express;
+        
+        this.server = this.app.listen(port, host, () => {
           logger.info(
-            `Express server with WebSocket started on port ${serverConfig.port.express}`
+            `Express server with WebSocket started on ${host}:${port}`
           );
           resolve();
         });
