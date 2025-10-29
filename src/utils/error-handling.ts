@@ -72,7 +72,7 @@ export function sanitizeErrorMessage(error: any, includeStack: boolean = false):
   }
 
   // For non-operational errors, return generic message in production
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.DEBUG === 'false') {
     return 'An internal error occurred';
   }
 

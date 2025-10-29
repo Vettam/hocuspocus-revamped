@@ -38,7 +38,7 @@ export const serverConfig: ServerConfig = {
   },
 };
 
-export const isDevelopment = process.env.NODE_ENV !== "production";
+export const isDevelopment = process.env.DEBUG === "true";
 
 // Validate required environment variables
 export function validateConfig(): void {
