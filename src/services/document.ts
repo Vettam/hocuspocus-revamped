@@ -1,5 +1,6 @@
 import * as Y from "yjs";
 import * as crypto from "crypto";
+import { Hocuspocus, Document as HocuspocusDocument } from "@hocuspocus/server";
 import { vettamAPI } from "./vettam-api";
 import { logger } from "../config/logger";
 import { RegexMatcher } from "../utils/regex_matcher";
@@ -202,6 +203,61 @@ export class DocumentService {
   }
 
   /**
+   * Persist document and cleanup resources
+   * Used in Hocuspocus lifecycle hooks (onDisconnect, etc.)
+   */
+  async persistAndCleanupDocument(
+    roomId: string | undefined,
+    document: HocuspocusDocument,
+    instance: Hocuspocus
+  ): Promise<void> {
+    try {
+      if (!roomId) {
+        logger.warn(
+          "No room id/document name available to persist on disconnect",
+          { documentName: document.name }
+        );
+        return;
+      }
+
+      logger.debug("Persisting document to storage", {
+        roomId,
+      });
+
+      // Retrieve Yjs document from our document service
+      const yDoc = this.documents.get(roomId);
+
+      if (!yDoc) {
+        logger.warn("No document found to persist", { roomId });
+        return Promise.reject();
+      }
+
+      // Persist the document state to storage
+      await this.saveSnapshot(roomId);
+
+      logger.info("Document persisted to storage", {
+        roomId,
+      });
+
+      // Unregister the document to free up resources
+      await instance.unloadDocument(document);
+      await this.removeDocument(roomId);
+      logger.info("Document unregistered and resources cleaned up", {
+        roomId,
+      });
+
+      return Promise.resolve();
+    } catch (error) {
+      logger.error("Failed to persist document", {
+        roomId,
+        documentName: document.name,
+        error: (error as Error).message,
+      });
+      return Promise.reject();
+    }
+  }
+
+  /**
    * Get all active document room IDs
    */
   getActiveDocuments(): string[] {
@@ -211,23 +267,12 @@ export class DocumentService {
   /**
    * Force cleanup of all documents (for shutdown)
    */
-  async shutdown(): Promise<void> {
-    logger.info("Shutting down document service...");
-
-    // Save and remove all documents
-    const roomIds = Array.from(this.documents.keys());
-    for (const roomId of roomIds) {
-      try {
-        await this.removeDocument(roomId);
-      } catch (error) {
-        logger.error("Failed to clean up document during shutdown", {
-          roomId,
-          error: (error as Error).message,
-        });
-      }
+  async shutdown(hocuspocusInstance: Hocuspocus): Promise<void> {
+    for (const [roomId, doc] of hocuspocusInstance.documents) {
+      await this.persistAndCleanupDocument(roomId, doc, hocuspocusInstance);
     }
 
-    logger.info("Document service shutdown complete");
+    return Promise.resolve();
   }
 }
 

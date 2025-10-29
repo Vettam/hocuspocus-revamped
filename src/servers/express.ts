@@ -25,10 +25,11 @@ import indexRouter from "../routes/index";
 import healthRouter from "../routes/health";
 import catchAllRouter from "../routes/catch-all";
 import stateRouter from "../routes/state";
+import { Server } from "http";
 
 export class ExpressServer {
   private app: expressWebsockets.Application; // Express app with WebSocket support
-  private server?: any;
+  private server?: Server;
   private hocuspocus: Hocuspocus;
 
   constructor() {
@@ -90,10 +91,9 @@ export class ExpressServer {
 
       // Connection closed hook
       onDisconnect: async (data) => {
-        const { documentName } = data;
-        const roomId = data.context?.room_id || data.documentName;
+        const roomId = data.context.room_id ?? data.documentName;
 
-        logger.info("Client disconnected from document", { documentName });
+        logger.info("Client disconnected from document", { roomId });
 
         // If clients are still connected, skip saving snapshot
         if (data.clientsCount !== 0) {
@@ -104,51 +104,12 @@ export class ExpressServer {
           return;
         }
 
-        try {
-          if (!roomId) {
-            logger.warn(
-              "No room id/document name available to persist on disconnect",
-              { data }
-            );
-            return;
-          }
-
-          logger.debug("Persisting document to storage on disconnect", {
-            roomId,
-          });
-
-          // Retrieve Yjs document from our document service
-          const yDoc = documentService.getDocument(roomId);
-
-          if (!yDoc) {
-            logger.warn("No document found to persist", { roomId });
-            return;
-          }
-
-          // Persist the document state to storage (assumes documentService.saveDocument exists)
-          await documentService.saveSnapshot(roomId);
-
-          logger.info("Document persisted to storage on disconnect", {
-            roomId,
-          });
-
-          // Unregister the document to free up resources
-          await data.instance.unloadDocument(data.document);
-          await documentService.removeDocument(roomId);
-          logger.info("Document unregistered and resources cleaned up", {
-            roomId,
-          });
-        } catch (error) {
-          logger.error("Failed to persist document on disconnect", {
-            documentName: data.documentName,
-            error: (error as Error).message,
-          });
-        }
-      },
-
-      // Error handling
-      onDestroy: async () => {
-        logger.info("Hocuspocus server is shutting down");
+        // Persist and cleanup document using documentService
+        await documentService.persistAndCleanupDocument(
+          roomId,
+          data.document,
+          data.instance
+        );
       },
     });
 
@@ -327,51 +288,30 @@ export class ExpressServer {
    * Stop the Express server
    */
   async stop(): Promise<void> {
-    // First, shut down document service
+    logger.info("Initiating Express server shutdown process");
+
     try {
-      logger.info("Shutting down document service...");
-      await documentService.shutdown();
-      logger.info("Document service shut down successfully");
+      // First, stop accepting new connections
+      if (this.server) {
+        logger.info("Closing Express server and stopping new connections");
+        this.server.close();
+      }
+
+      // Then cleanup document service
+      logger.info("Starting document service cleanup during server shutdown");
+      await documentService.shutdown(this.hocuspocus);
+      logger.info("Document service cleanup completed successfully");
+
+      logger.info("Express server shutdown process completed successfully");
     } catch (error) {
-      logger.error("Error shutting down document service", {
+      logger.error("Critical error during Express server shutdown", {
         error: (error as Error).message,
+        stack: (error as Error).stack,
       });
     }
 
-    return new Promise((resolve, reject) => {
-      // Then, gracefully shut down Hocuspocus
-      if (this.hocuspocus) {
-        try {
-          logger.info("Shutting down Hocuspocus instance...");
-          // Hocuspocus will be cleaned up when the WebSocket server closes
-          // No explicit destroy method available in current version
-          logger.info(
-            "Hocuspocus instance will be cleaned up with WebSocket server"
-          );
-        } catch (error) {
-          logger.error("Error shutting down Hocuspocus", {
-            error: (error as Error).message,
-          });
-        }
-      }
-
-      // Finally close the Express server
-      if (this.server) {
-        this.server.close((error?: Error) => {
-          if (error) {
-            logger.error("Error stopping Express server", {
-              error: error.message,
-            });
-            reject(error);
-          } else {
-            logger.info("Express server stopped");
-            resolve();
-          }
-        });
-      } else {
-        resolve();
-      }
-    });
+    logger.info("Terminating Node.js process");
+    process.exit(1);
   }
 
   /**
