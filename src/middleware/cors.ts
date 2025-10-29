@@ -6,7 +6,13 @@ import safeRegex from "safe-regex";
  * Converts a wildcard pattern to a RegExp
  * Supports patterns like: https://*.vettam.app, http://*.example.com
  */
+// module level cache for compiled regexes
+const regexCache = new Map<string, RegExp>();
+
 function wildcardToRegex(pattern: string): RegExp {
+  const cached = regexCache.get(pattern);
+  if (cached) return cached;
+
   const escapedPattern = pattern
     .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\*/g, ".*");
@@ -16,7 +22,9 @@ function wildcardToRegex(pattern: string): RegExp {
     throw new Error(`Unsafe CORS wildcard pattern: ${pattern}`);
   }
 
-  return new RegExp(regexStr);
+  const regex = new RegExp(regexStr);
+  regexCache.set(pattern, regex);
+  return regex;
 }
 
 /**
