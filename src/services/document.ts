@@ -65,7 +65,7 @@ export class DocumentService {
   }
 
   applyUpdate(roomId: string, update: Uint8Array): void {
-    logger.debug("Applying update to room:", roomId);
+    logger.debug("Applying update to room:", { roomId });
     let yDoc = this.documents.get(roomId);
     if (!yDoc) {
       yDoc = new Y.Doc();
@@ -229,7 +229,7 @@ export class DocumentService {
 
       if (!yDoc) {
         logger.warn("No document found to persist", { roomId });
-        return Promise.reject();
+        return;
       }
 
       // Persist the document state to storage
