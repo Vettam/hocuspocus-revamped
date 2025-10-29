@@ -15,35 +15,15 @@ services:
       # Enable Traefik for this container
       - "traefik.enable=true"
 
-      # Express REST API (HTTP)
-      - "traefik.http.routers.vettam-api.rule=Host(`api.vettam.local`)"
-      - "traefik.http.routers.vettam-api.entrypoints=web"
-      - "traefik.http.routers.vettam-api.service=vettam-api"
-      - "traefik.http.services.vettam-api.loadbalancer.server.port=3000"
-
       # Express REST API (HTTPS)
-      - "traefik.http.routers.vettam-api-secure.rule=Host(`api.vettam.local`)"
+      - "traefik.http.routers.vettam-api-secure.rule=Host(`${PUBLIC_HOST}`)"
       - "traefik.http.routers.vettam-api-secure.entrypoints=websecure"
       - "traefik.http.routers.vettam-api-secure.tls=true"
       - "traefik.http.routers.vettam-api-secure.service=vettam-api"
 
-      # Hocuspocus WebSocket (HTTP)
-      - "traefik.http.routers.vettam-ws.rule=Host(`ws.vettam.local`)"
-      - "traefik.http.routers.vettam-ws.entrypoints=web"
-      - "traefik.http.routers.vettam-ws.service=vettam-ws"
-      - "traefik.http.services.vettam-ws.loadbalancer.server.port=1234"
-
-      # Hocuspocus WebSocket (HTTPS)
-      - "traefik.http.routers.vettam-ws-secure.rule=Host(`ws.vettam.local`)"
-      - "traefik.http.routers.vettam-ws-secure.entrypoints=websecure"
-      - "traefik.http.routers.vettam-ws-secure.tls=true"
-      - "traefik.http.routers.vettam-ws-secure.service=vettam-ws"
-
-      # Middleware for CORS and headers (optional)
-      - "traefik.http.middlewares.vettam-headers.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
-      - "traefik.http.middlewares.vettam-headers.headers.accesscontrolalloworiginlist=*"
-      - "traefik.http.middlewares.vettam-headers.headers.accesscontrolmaxage=100"
-      - "traefik.http.middlewares.vettam-headers.headers.addvaryheader=true"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
 networks:
   hocuspocus-network:

@@ -1,15 +1,14 @@
 import * as Y from "yjs";
 import * as crypto from "crypto";
+import { Hocuspocus, Document as HocuspocusDocument } from "@hocuspocus/server";
 import { vettamAPI } from "./vettam-api";
 import { logger } from "../config/logger";
-import { AUTO_SAVE_INTERVAL } from "../config/constants";
 import { RegexMatcher } from "../utils/regex_matcher";
 import { yDocToJSON } from "../utils/ydoc/converters";
 import { schema } from "../utils/ydoc/schema";
 
 export class DocumentService {
   private documents: Map<string, Y.Doc> = new Map();
-  private saveTimers: Map<string, NodeJS.Timeout> = new Map();
   private dirtyFlags: Map<string, boolean> = new Map();
 
   /**
@@ -25,9 +24,6 @@ export class DocumentService {
     yDoc.on("update", () => {
       this.onDocumentUpdate(roomId);
     });
-
-    // Set up auto-save timer
-    this.setupAutoSaveTimer(roomId);
   }
 
   /**
@@ -69,7 +65,7 @@ export class DocumentService {
   }
 
   applyUpdate(roomId: string, update: Uint8Array): void {
-    console.log("Applying update to room:", roomId);
+    logger.debug("Applying update to room:", { roomId });
     let yDoc = this.documents.get(roomId);
     if (!yDoc) {
       yDoc = new Y.Doc();
@@ -77,7 +73,6 @@ export class DocumentService {
     }
     Y.applyUpdate(yDoc, update);
     this.onDocumentUpdate(roomId);
-    this.setupAutoSaveTimer(roomId);
   }
 
   /**
@@ -165,24 +160,6 @@ export class DocumentService {
   }
 
   /**
-   * Set up auto-save timer for a room
-   */
-  private setupAutoSaveTimer(roomId: string): void {
-    // Clear existing timer if any
-    const existingTimer = this.saveTimers.get(roomId);
-    if (existingTimer) {
-      clearInterval(existingTimer);
-    }
-
-    // Set up new timer
-    const timer = setInterval(() => {
-      this.saveSnapshot(roomId);
-    }, AUTO_SAVE_INTERVAL);
-
-    this.saveTimers.set(roomId, timer);
-  }
-
-  /**
    * Handle document updates - mark as dirty
    */
   private onDocumentUpdate(roomId: string): void {
@@ -201,6 +178,7 @@ export class DocumentService {
         `Document not found for room: ${roomId}. Document must be loaded via WebSocket connection first.`
       );
     }
+
     return doc;
   }
 
@@ -211,13 +189,6 @@ export class DocumentService {
     // Save snapshot before removing
     await this.saveSnapshot(roomId);
 
-    // Clear timer
-    const timer = this.saveTimers.get(roomId);
-    if (timer) {
-      clearInterval(timer);
-      this.saveTimers.delete(roomId);
-    }
-
     // Destroy and remove document
     const doc = this.documents.get(roomId);
     if (doc) {
@@ -225,10 +196,65 @@ export class DocumentService {
       this.documents.delete(roomId);
     }
 
-    // Clean up flags
+    // Clean up all tracking data
     this.dirtyFlags.delete(roomId);
 
     logger.info("Document removed from memory", { roomId });
+  }
+
+  /**
+   * Persist document and cleanup resources
+   * Used in Hocuspocus lifecycle hooks (onDisconnect, etc.)
+   */
+  async persistAndCleanupDocument(
+    roomId: string | undefined,
+    document: HocuspocusDocument,
+    instance: Hocuspocus
+  ): Promise<void> {
+    try {
+      if (!roomId) {
+        logger.warn(
+          "No room id/document name available to persist on disconnect",
+          { documentName: document.name }
+        );
+        return;
+      }
+
+      logger.debug("Persisting document to storage", {
+        roomId,
+      });
+
+      // Retrieve Yjs document from our document service
+      const yDoc = this.documents.get(roomId);
+
+      if (!yDoc) {
+        logger.warn("No document found to persist", { roomId });
+        return;
+      }
+
+      // Persist the document state to storage
+      await this.saveSnapshot(roomId);
+
+      logger.info("Document persisted to storage", {
+        roomId,
+      });
+
+      // Unregister the document to free up resources
+      await instance.unloadDocument(document);
+      await this.removeDocument(roomId);
+      logger.info("Document unregistered and resources cleaned up", {
+        roomId,
+      });
+
+      return Promise.resolve();
+    } catch (error) {
+      logger.error("Failed to persist document", {
+        roomId,
+        documentName: document.name,
+        error: (error as Error).message,
+      });
+      return Promise.reject();
+    }
   }
 
   /**
@@ -236,6 +262,17 @@ export class DocumentService {
    */
   getActiveDocuments(): string[] {
     return Array.from(this.documents.keys());
+  }
+
+  /**
+   * Force cleanup of all documents (for shutdown)
+   */
+  async shutdown(hocuspocusInstance: Hocuspocus): Promise<void> {
+    for (const [roomId, doc] of hocuspocusInstance.documents) {
+      await this.persistAndCleanupDocument(roomId, doc, hocuspocusInstance);
+    }
+
+    return Promise.resolve();
   }
 }
 

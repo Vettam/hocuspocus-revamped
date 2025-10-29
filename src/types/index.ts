@@ -83,12 +83,11 @@ export interface APIErrorResponse {
 // Configuration types
 export interface ServerConfig {
   port: {
-    hocuspocus: number;
     express: number;
   };
   host: {
-    hocuspocus: string;
-    express: string;
+    publicHost: string;
+    bindHost: string;
   };
   cors: {
     origin: string | string[] | boolean;
@@ -102,5 +101,7 @@ export interface ServerConfig {
   jwt: {
     secret: string;
     algorithm: string;
+    audience: string;
+    issuer: string;
   };
 }

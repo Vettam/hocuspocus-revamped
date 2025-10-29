@@ -6,17 +6,23 @@ config();
 
 export const serverConfig: ServerConfig = {
   port: {
-    hocuspocus: parseInt(process.env.HOCUSPOCUS_PORT || "1234", 10),
     express: parseInt(process.env.EXPRESS_PORT || "3000", 10),
   },
   host: {
-    hocuspocus: process.env.HOCUSPOCUS_HOST || "localhost",
-    express: process.env.EXPRESS_HOST || "localhost",
+    // For display/logging purposes only (e.g., in Docker labels, health checks)
+    // The application always binds to 0.0.0.0 internally
+    // Set PUBLIC_HOST to your actual domain (e.g., collaboration.api.vettam.app)
+    publicHost: process.env.PUBLIC_HOST!,
+    bindHost: "0.0.0.0"
   },
   cors: {
-    origin: process.env.CORS_ORIGIN
-      ? process.env.CORS_ORIGIN.split(",")
-      : ["http://localhost:3000"],
+    origin:
+      process.env.DEBUG === "false"
+        ? (process.env.CORS_ORIGIN ?? "")
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : ["*"],
     credentials: process.env.CORS_CREDENTIALS === "true",
   },
   vettam: {
@@ -27,15 +33,22 @@ export const serverConfig: ServerConfig = {
   jwt: {
     secret: process.env.JWT_SECRET!,
     algorithm: process.env.JWT_ALGORITHM || "HS256",
+    audience: process.env.JWT_AUDIENCE || "authenticated",
+    issuer: process.env.JWT_ISSUER!,
   },
 };
 
-export const isDevelopment = process.env.NODE_ENV !== "production";
-export const isProduction = process.env.NODE_ENV === "production";
+export const isDevelopment = process.env.DEBUG === "true";
 
 // Validate required environment variables
 export function validateConfig(): void {
-  const requiredVars = ["JWT_SECRET", "VETTAM_API_URL"];
+  const requiredVars = [
+    "JWT_SECRET",
+    "VETTAM_API_URL",
+    "VETTAM_API_KEY",
+    "JWT_ISSUER",
+    "PUBLIC_HOST",
+  ];
 
   const missingVars = requiredVars.filter((varName) => !process.env[varName]);
 
@@ -43,6 +56,21 @@ export function validateConfig(): void {
     throw new Error(
       `Missing required environment variables: ${missingVars.join(", ")}`
     );
+  }
+
+  // Validate JWT secret strength
+  const jwtSecret = process.env.JWT_SECRET!;
+  if (jwtSecret.length < 32) {
+    throw new Error(
+      "JWT_SECRET must be at least 32 characters long for security"
+    );
+  }
+
+  // Validate ports are valid numbers
+  const expressPort = parseInt(process.env.EXPRESS_PORT || "3000", 10);
+
+  if (isNaN(expressPort) || expressPort < 1 || expressPort > 65535) {
+    throw new Error("EXPRESS_PORT must be a valid port number (1-65535)");
   }
 }
 

@@ -1,4 +1,4 @@
-export function tiptsapJsonToMarkdown(tiptapJson: any): string {
+export function tiptapJsonToMarkdown(tiptapJson: any): string {
   if (!tiptapJson || !tiptapJson.content) {
     return "";
   }

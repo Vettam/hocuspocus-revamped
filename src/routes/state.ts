@@ -1,23 +1,47 @@
 import { Router, Request, Response } from "express";
 import { documentService } from "../services/document";
 import { logger } from "../config/logger";
-import { APIErrorResponse } from "../types";
-import { markdownToTiptapJson, tiptsapJsonToMarkdown } from "../utils";
+import { 
+  markdownToTiptapJson, 
+  tiptapJsonToMarkdown, 
+  ErrorFactory,
+  asyncHandler 
+} from "../utils";
 import { yDocToJSON, jsonToYDoc } from "../utils/ydoc/converters";
 import { schema } from "../utils/ydoc/schema";
+import { RegexMatcher } from "../utils/regex_matcher";
 
 const stateRouter = Router();
 
 /**
- * GET /room/:id/state
+ * GET /room/:draftId/:versionId/state
  * Get markdown content of room's YDoc (YDoc -> JSON -> Markdown)
  */
-stateRouter.get("/:id/state", async (req: Request, res: Response) => {
+stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, res: Response) => {
+  const { draftId, versionId } = req.params;
+
+  if (!draftId || typeof draftId !== 'string') {
+    throw ErrorFactory.validation("Draft ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(draftId)) {
+    throw ErrorFactory.validation("Draft ID must be a valid UUID");
+  }
+
+  if (!versionId || typeof versionId !== 'string') {
+    throw ErrorFactory.validation("Version ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(versionId)) {
+    throw ErrorFactory.validation("Version ID must be a valid UUID");
+  }
+
+  // Construct roomId from draftId and versionId
+  const roomId = `${draftId}:${versionId}`;
+
+  logger.info("Getting room state as markdown", { roomId, draftId, versionId });
+
   try {
-    const roomId = req.params.id;
-
-    logger.info("Getting room state as markdown", { roomId });
-
     // Get the YDoc for the room
     const yDoc = documentService.getDocument(roomId);
 
@@ -31,7 +55,7 @@ stateRouter.get("/:id/state", async (req: Request, res: Response) => {
     });
 
     // Convert TipTap JSON to markdown
-    const markdownContent = tiptsapJsonToMarkdown(tiptapJson);
+    const markdownContent = tiptapJsonToMarkdown(tiptapJson);
 
     logger.info("TipTap JSON converted to markdown", {
       roomId,
@@ -46,46 +70,53 @@ stateRouter.get("/:id/state", async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Error getting room state", {
-      roomId: req.params.id,
-      error: (error as Error).message,
-    });
-
-    const apiError: APIErrorResponse = {
-      message: (error as Error).message || "Failed to get room state",
-      error: "Internal Server Error",
-      statusCode: 500,
-      timestamp: new Date().toISOString(),
-    };
-
-    return res.status(500).json(apiError);
+    if ((error as Error).message.includes("Document not found")) {
+      throw ErrorFactory.notFound(`Document for room ${roomId}`);
+    }
+    throw ErrorFactory.internal(`Failed to get room state: ${(error as Error).message}`);
   }
-});
+}));
 
 /**
- * PATCH /room/:id/state
+ * PATCH /room/:draftId/:versionId/state
  * Update room's YDoc with markdown content (Markdown -> JSON -> YDoc)
  */
-stateRouter.patch("/:id/state", async (req: Request, res: Response) => {
+stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request, res: Response) => {
+  const { draftId, versionId } = req.params;
+  const { content } = req.body;
+
+  // Validation
+  if (!draftId || typeof draftId !== 'string') {
+    throw ErrorFactory.validation("Draft ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(draftId)) {
+    throw ErrorFactory.validation("Draft ID must be a valid UUID");
+  }
+
+  if (!versionId || typeof versionId !== 'string') {
+    throw ErrorFactory.validation("Version ID is required and must be a valid string");
+  }
+
+  if (!RegexMatcher.matchUUID(versionId)) {
+    throw ErrorFactory.validation("Version ID must be a valid UUID");
+  }
+
+  if (typeof content !== "string") {
+    throw ErrorFactory.validation("content is required and must be a string");
+  }
+
+  // Construct roomId from draftId and versionId
+  const roomId = `${draftId}:${versionId}`;
+
+  logger.info("Updating room state with markdown", {
+    roomId,
+    draftId,
+    versionId,
+    contentLength: content.length,
+  });
+
   try {
-    const roomId = req.params.id;
-    const { content } = req.body;
-
-    if (typeof content !== "string") {
-      const apiError: APIErrorResponse = {
-        message: "content is required and must be a string",
-        error: "Bad Request",
-        statusCode: 400,
-        timestamp: new Date().toISOString(),
-      };
-      return res.status(400).json(apiError);
-    }
-
-    logger.info("Updating room state with markdown", {
-      roomId,
-      contentLength: content.length,
-    });
-
     // Convert markdown to TipTap JSON
     const tiptapJson = markdownToTiptapJson(content);
 
@@ -114,32 +145,18 @@ stateRouter.patch("/:id/state", async (req: Request, res: Response) => {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error("Error updating room state", {
-      roomId: req.params.id,
-      error: (error as Error).message,
-    });
-
-    let statusCode = 500;
-    let errorMessage = "Internal Server Error";
-
-    // Handle specific error types
-    if ((error as Error).message.includes("Invalid room ID format")) {
-      statusCode = 400;
-      errorMessage = "Bad Request";
-    } else if ((error as Error).message.includes("Failed to convert")) {
-      statusCode = 422;
-      errorMessage = "Unprocessable Entity";
+    const errorMessage = (error as Error).message;
+    
+    if (errorMessage.includes("Document not found")) {
+      throw ErrorFactory.notFound(`Document for room ${roomId}`);
+    } else if (errorMessage.includes("Invalid room ID format")) {
+      throw ErrorFactory.validation("Invalid room ID format");
+    } else if (errorMessage.includes("Failed to convert")) {
+      throw ErrorFactory.validation("Failed to convert markdown content");
+    } else {
+      throw ErrorFactory.internal(`Failed to update room state: ${errorMessage}`);
     }
-
-    const apiError: APIErrorResponse = {
-      message: (error as Error).message || "Failed to update room state",
-      error: errorMessage,
-      statusCode,
-      timestamp: new Date().toISOString(),
-    };
-
-    return res.status(statusCode).json(apiError);
   }
-});
+}));
 
 export default stateRouter;

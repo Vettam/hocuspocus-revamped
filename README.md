@@ -1,194 +1,232 @@
 # Vettam Hocuspocus Backend
 
-A modular TypeScript server with Hocuspocus CRDT collaboration and Express REST API for document collaboration, integrated with the Vettam Primary API Service.
+A production-ready TypeScript server combining **Hocuspocus real-time collaboration** with **Express REST API** for document management, integrated with Vettam's primary API service. This unified server handles both WebSocket-based collaborative editing and HTTP-based document operations.
 
-## Features
+## 🚀 Features
 
-- ✅ JWT token verification using `jose` library
-- ✅ Supabase integration for user authorization
-- ✅ Support for both JWKS and secret-based JWT verification
-- ✅ Clean separation of concerns with modular architecture
-- ✅ Comprehensive error handling and logging
-- ✅ Environment-based configuration
-- ✅ TypeScript with full type safety
+### Core Collaboration
+- ✅ **Real-time collaborative editing** via Hocuspocus (Y.js CRDTs)  
+- ✅ **Document persistence** with automatic snapshots to Vettam API
+- ✅ **Memory management** with automatic cleanup of inactive documents
+- ✅ **Bidirectional conversion** between Markdown ↔ TipTap JSON ↔ Y.Doc
 
-## Prerequisites
+### Security & Authentication  
+- ✅ **JWT-based authentication** using `jose` library with robust validation
+- ✅ **API key middleware** for internal service protection
+- ✅ **Rate limiting** with JWT-based user identification  
+- ✅ **CORS configuration** with production domain restrictions
+- ✅ **Security headers** (CSP, X-Frame-Options, etc.)
 
-- Node.js 18+ 
-- npm or yarn
-- Supabase project with authentication enabled
+### Production Ready
+- ✅ **Standardized error handling** with consistent API responses
+- ✅ **Structured logging** with request correlation
+- ✅ **Graceful shutdown** with document persistence
+- ✅ **Health monitoring** endpoints
+- ✅ **Docker containerization** with multi-stage builds
+- ✅ **TypeScript** with comprehensive type safety
 
-## Setup
+## 🏗️ Architecture
 
-1. **Clone and install dependencies:**
+### Unified Server Design
+```
+┌──────────────────────────────────────────────────────┐
+│                Express Server                        │
+├──────────────────────────────────────────────────────┤
+│  HTTP Routes               │  WebSocket Handler      │
+│  ├─ /health                │  └─ /collaboration      │
+│  ├─ /v1/state/:id/state    │      (Hocuspocus)       │
+│  └─ API endpoints          │                         │
+├──────────────────────────────────────────────────────┤
+│                Middleware Stack                      │
+│    Security → CORS → Rate Limit → API Key → Body     │
+└──────────────────────────────────────────────────────┘
+           │                    │
+           ▼                    ▼
+    ┌──────────────┐    ┌──────────────┐
+    │ Document     │    │ Vettam API   │
+    │ Service      │    │ Integration  │
+    │ (Y.js Mgmt)  │    │ (Auth/Data)  │
+    └──────────────┘    └──────────────┘
+```
+
+### Project Structure
+```
+src/
+├── server.ts                 # Main application entry point
+├── config/                   # Configuration management
+│   ├── index.ts               # Environment variables & validation
+│   ├── logger.ts              # Structured logging setup
+│   └── constants.ts           # Application constants
+├── servers/
+│   └── express.ts           # Unified Express+WebSocket server
+├── routes/                  # HTTP API endpoints
+│   ├── index.ts               # Root endpoint (API info)
+│   ├── health.ts              # Health check endpoint
+│   └── state.ts               # Document state management
+├── services/                # Business logic services
+│   ├── document.ts            # Y.Doc management & persistence
+│   └── vettam-api.ts          # External API integration
+├── middleware/              # Express middleware
+│   └── api-key.ts             # API key authentication
+├── utils/                   # Utility functions
+│   ├── auth-utils.ts          # JWT handling utilities
+│   ├── error-handling.ts      # Standardized error management
+│   └── converters/            # Document format converters
+└── types/                  # TypeScript type definitions
+```
+
+## 🔧 Setup & Configuration
+
+### Installation
+
+1. **Install dependencies:**
    ```bash
    npm install
    ```
 
-2. **Environment Configuration:**
-   Copy `.env.example` to `.env` and fill in your values:
+2. **Configure environment:**
    ```bash
    cp .env.example .env
    ```
 
-   Required environment variables:
-   ```env
-   SUPABASE_URL=https://your-project.supabase.co
-   SUPABASE_JWT_SECRET=your-jwt-secret-here
-   RPC_KEY=your-rpc-key-here
-   PORT=1234
-   NODE_ENV=development
-   ```
+3. Fill in .env file
 
-3. **Supabase Setup:**
-   
-   Create an RPC function in your Supabase database:
-   ```sql
-   CREATE OR REPLACE FUNCTION authorize_document_access(
-     user_id text,
-     document_name text
-   )
-   RETURNS json
-   LANGUAGE plpgsql
-   SECURITY DEFINER
-   AS $$
-   DECLARE
-     result json;
-   BEGIN
-     -- Your authorization logic here
-     -- Example: Check if user has access to the document
-     
-     IF user_id IS NOT NULL AND document_name IS NOT NULL THEN
-       -- For demo purposes, allow all authenticated users
-       -- Replace with your actual authorization logic
-       result := json_build_object('allowed', true);
-     ELSE
-       result := json_build_object('allowed', false, 'reason', 'Invalid parameters');
-     END IF;
-     
-     RETURN result;
-   END;
-   $$;
-   ```
+### Development
 
-## Development
-
-**Start the development server:**
 ```bash
+# Start development server with Docker (recommended)
+docker compose -f docker-compose.yml -f docker-compose.dev-override.yml up --build
+
+# Or start development server with hot reload locally
 npm run dev
-```
 
-**Build for production:**
-```bash
+# Build for production  
 npm run build
+
+# Start production server
 npm start
 ```
 
-## Usage
+## 🔐 Authentication & Security
 
-### Client Connection
-
-Connect to the WebSocket server with JWT authentication:
+### WebSocket Authentication
+Authentication via Authorization header:
 
 ```javascript
-// Option 1: Token in URL parameter
-const ws = new WebSocket('ws://localhost:1234?token=your-jwt-token');
-
-// Option 2: Token in Authorization header (if supported by your client)
-const ws = new WebSocket('ws://localhost:1234', {
-  headers: {
-    'Authorization': 'Bearer your-jwt-token'
-  }
+const ws = new WebSocket('ws://localhost:3000/collaboration', {
+  headers: { 'Authorization': 'Bearer jwt_token' }
 });
 ```
 
-### Authentication Flow
+### API Key Protection
+REST endpoints are protected by API key middleware:
 
-1. Client connects with JWT token
-2. Server verifies JWT using JWKS or secret
-3. Server extracts user ID from JWT payload
-4. Server calls Supabase RPC to authorize document access
-5. Connection accepted if authorization succeeds
-
-### Document Access
-
-The server uses the document name from the connection to determine access. Each document can have different authorization rules implemented in your Supabase RPC function.
-
-## Architecture
-
-```
-src/
-├── server.ts      # Main server and Hocuspocus configuration
-├── jwt.ts         # JWT verification using jose library
-├── auth.ts        # Supabase authorization service
-└── types.ts       # TypeScript type definitions
+```http
+GET /v1/state/uuid:uuid/state
+X-API-Key: generated_daily_hash
 ```
 
-### Key Components
+**Open endpoints** (no API key required):
+- `/health`
+- `/` (root)  
+- `/collaboration/*` (WebSocket)
 
-- **JWTVerifier**: Handles JWT token verification with JWKS fallback
-- **SupabaseAuthorizationService**: Manages authorization via Supabase RPC
-- **Server Configuration**: Hocuspocus server with authentication hooks
+### Rate Limiting
+- **Authenticated users**: 100 requests/15min
+- **Unauthenticated**: 30 requests/15min  
+- **WebSocket connections**: Exempt from rate limits
 
-## Configuration Options
+## 🔄 Document Flow
 
-### JWT Verification
+### Real-time Collaboration Workflow
+```
+1. Client connects via WebSocket with JWT
+2. Server validates JWT & checks document access via Vettam API
+3. Server loads existing document state from Vettam API  
+4. Y.Doc instance created/retrieved for real-time collaboration
+5. Document changes sync in real-time between all clients
+6. Auto-save snapshots to Vettam API every 30 minutes
+7. Manual save on client disconnect
+```
 
-The system supports two JWT verification methods:
+### Document Format Conversions
+```
+Markdown ↔ TipTap JSON ↔ Y.js Document (CRDT)
+    ↑           ↑            ↑
+REST API   Internal     WebSocket
+Storage   Processing   Collaboration
+```
 
-1. **JWKS (Recommended)**: Automatically fetches public keys from Supabase
-2. **Secret-based**: Uses the JWT secret directly
+### Room ID Format
+Documents are identified by: `{draft_id}:{version_id}`
+- Both IDs must be valid UUIDs
+- Format validated via regex patterns
+- Used for Vettam API integration
 
-### Authorization Methods
+## 🚀 Production Deployment
 
-Two authorization approaches are supported:
+### Docker Deployment
+```bash
+# Build image
+docker build -t vettam-hocuspocus .
 
-1. **RPC Functions**: Call Supabase stored procedures
-2. **Edge Functions**: Call Supabase Edge Functions
+# Run container
+docker run -p 3000:3000 --env-file .env vettam-hocuspocus
 
-## Error Handling
+# Or use docker-compose
+docker-compose up -d
+```
 
-The server provides detailed error logging for:
+### Environment-Specific Configuration
 
-- JWT verification failures
-- Authorization failures  
-- Network connectivity issues
-- Invalid tokens or expired tokens
+#### Production Settings
+```env
+NODE_ENV=production
+DEBUG=false
+CORS_ORIGIN=https://app.vettam.app,https://admin.vettam.app
+```
 
-## Security Considerations
+#### Security Checklist
+- ✅ JWT secret minimum 32 characters
+- ✅ CORS restricted to `*.vettam.app` domains  
+- ✅ API keys rotated daily (automatic)
+- ✅ Rate limiting enabled
+- ✅ Security headers configured
+- ✅ Error messages sanitized
 
-- JWT tokens are verified for signature and expiration
-- All authorization calls are made with the user's token
-- Environment variables store sensitive configuration
-- Comprehensive error logging without exposing sensitive data
+### Monitoring & Health Checks
+```bash
+# Health check endpoint
+curl http://localhost:3000/health
 
-## Troubleshooting
+# Container health check (Docker)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+```
 
-### Common Issues
+### REST API Usage
+API requests require the `X-API-Key` header with the generated daily hash. See Bruno collection for detailed request/response examples.
 
-1. **JWT Verification Fails**
-   - Check `SUPABASE_JWT_SECRET` in environment
-   - Verify Supabase URL is correct
-   - Ensure token is properly formatted
+## 📊 Monitoring & Observability
 
-2. **Authorization RPC Fails**
-   - Verify RPC function exists in Supabase
-   - Check `RPC_KEY` permissions
-   - Ensure user has necessary permissions
+### Structured Logging
+All logs include contextual information with timestamps, log levels, and relevant metadata for debugging and monitoring.
 
-3. **Connection Issues**
-   - Verify port is not in use
-   - Check firewall settings
-   - Ensure WebSocket client is compatible
+### Key Metrics to Monitor
+- Active WebSocket connections
+- Document persistence success rate  
+- Authentication failure rates
+- Memory usage and document cleanup
+- API response times
 
-## Production Deployment
+## 🤝 Contributing
 
-1. Set `NODE_ENV=production`
-2. Use proper secrets management
-3. Configure reverse proxy (nginx/Apache)
-4. Set up SSL/TLS termination
-5. Configure monitoring and logging
+1. Follow TypeScript strict mode
+2. Use structured error handling via `ErrorFactory`
+3. Wrap async routes with `asyncHandler`
+4. Add proper JSDoc comments
+5. Test both WebSocket and REST functionality
 
-## License
+## 📄 License
 
-MIT License
+MIT License - see LICENSE file for details.

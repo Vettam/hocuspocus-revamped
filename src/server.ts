@@ -1,16 +1,13 @@
-import { validateConfig, serverConfig } from "./config";
+import { serverConfig, validateConfig } from "./config";
 import { logger } from "./config/logger";
-import HocuspocusServer from "./servers/hocuspocus";
 import ExpressServer from "./servers/express";
 import { vettamAPI } from "./services/vettam-api";
 
 class VettamBackendServer {
-  private hocuspocusServer: HocuspocusServer;
   private expressServer: ExpressServer;
   private isShuttingDown = false;
 
   constructor() {
-    this.hocuspocusServer = new HocuspocusServer();
     this.expressServer = new ExpressServer();
 
     this.setupGracefulShutdown();
@@ -35,23 +32,20 @@ class VettamBackendServer {
         logger.warn("Vettam API health check failed, continuing startup...");
       }
 
-      // Start Express server first
+      // Start Express server with integrated WebSocket
       await this.expressServer.start();
-      logger.info(
-        `✓ Express REST API server started on port ${serverConfig.port.express}`
-      );
 
-      // Start Hocuspocus server
-      await this.hocuspocusServer.start();
-      logger.info(
-        `✓ Hocuspocus WebSocket server started on port ${serverConfig.port.hocuspocus}`
-      );
-
+      // Log server endpoints
+      const publicHost = serverConfig.host.publicHost;
+      const port = serverConfig.port.express;
+      
       logger.info("🚀 Vettam Backend Server started successfully!");
       logger.info("Server endpoints:", {
-        "REST API": `http://${serverConfig.host.express}:${serverConfig.port.express}`,
-        WebSocket: `ws://${serverConfig.host.hocuspocus}:${serverConfig.port.hocuspocus}`,
-        "Health Check": `http://${serverConfig.host.express}:${serverConfig.port.express}/health`,
+        "Public Host": publicHost,
+        "Internal Bind": `0.0.0.0:${port}`,
+        "REST API": `http://${publicHost}:${port}`,
+        "WebSocket": `ws://${publicHost}:${port}/collaboration`,
+        "Health Check": `http://${publicHost}:${port}/health`,
       });
     } catch (error) {
       logger.error("Failed to start server", {
@@ -74,12 +68,9 @@ class VettamBackendServer {
     logger.info("Shutting down Vettam Backend Server...");
 
     try {
-      // Stop servers in reverse order
-      await this.hocuspocusServer.stop();
-      logger.info("✓ Hocuspocus server stopped");
-
+      // Stop Express server with integrated WebSocket
       await this.expressServer.stop();
-      logger.info("✓ Express server stopped");
+      logger.info("✓ Express server with WebSocket stopped");
 
       logger.info("✓ Vettam Backend Server shut down successfully");
     } catch (error) {

@@ -49,8 +49,6 @@ export class VettamAPIService {
       .toString()
       .padStart(2, "0")}`;
 
-    console.log("DATE: ", date);
-
     return createHash("sha256")
       .update(`${date}${serverConfig.vettam.apiKey}`, "utf8")
       .digest("hex");
