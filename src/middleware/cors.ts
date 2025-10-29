@@ -1,17 +1,22 @@
 import cors from "cors";
 import { serverConfig } from "../config";
+import safeRegex from "safe-regex";
 
 /**
  * Converts a wildcard pattern to a RegExp
  * Supports patterns like: https://*.vettam.app, http://*.example.com
  */
 function wildcardToRegex(pattern: string): RegExp {
-  // Escape special regex characters except for *
   const escapedPattern = pattern
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '.*');
-  
-  return new RegExp(`^${escapedPattern}$`);
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
+
+  const regexStr = `^${escapedPattern}$`;
+  if (!safeRegex(regexStr)) {
+    throw new Error(`Unsafe CORS wildcard pattern: ${pattern}`);
+  }
+
+  return new RegExp(regexStr);
 }
 
 /**
@@ -22,31 +27,33 @@ function isOriginAllowed(
   allowedOrigins: string | string[] | boolean
 ): boolean {
   if (!origin) return false;
-  
+
   // If allowedOrigins is true, allow all origins
   if (allowedOrigins === true) return true;
-  
+
   // If allowedOrigins is false, disallow all origins
   if (allowedOrigins === false) return false;
-  
+
   // If allowedOrigins is a string, convert to array
-  const originsArray = Array.isArray(allowedOrigins) ? allowedOrigins : [allowedOrigins];
-  
+  const originsArray = Array.isArray(allowedOrigins)
+    ? allowedOrigins
+    : [allowedOrigins];
+
   // Check for wildcard "*" - allow all origins
   if (originsArray.includes("*")) return true;
-  
+
   // Check each allowed origin
   for (const allowedOrigin of originsArray) {
     // Exact match
     if (allowedOrigin === origin) return true;
-    
+
     // Wildcard pattern match
     if (allowedOrigin.includes("*")) {
       const regex = wildcardToRegex(allowedOrigin);
       if (regex.test(origin)) return true;
     }
   }
-  
+
   return false;
 }
 
@@ -70,7 +77,7 @@ export const corsMiddleware = () => {
       if (!origin) {
         return callback(null, true);
       }
-      
+
       if (isOriginAllowed(origin, corsOrigin)) {
         callback(null, true);
       } else {
