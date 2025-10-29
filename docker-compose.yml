@@ -16,7 +16,7 @@ services:
       - "traefik.enable=true"
 
       # Express REST API (HTTPS)
-      - "traefik.http.routers.vettam-api-secure.rule=Host(`collaboration.api.vettam.app`)"
+      - "traefik.http.routers.vettam-api-secure.rule=Host(`${PUBLIC_HOST}`)"
       - "traefik.http.routers.vettam-api-secure.entrypoints=websecure"
       - "traefik.http.routers.vettam-api-secure.tls=true"
       - "traefik.http.routers.vettam-api-secure.service=vettam-api"
