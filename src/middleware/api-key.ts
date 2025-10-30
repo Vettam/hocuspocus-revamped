@@ -106,6 +106,7 @@ export const DEFAULT_OPEN_LOCATIONS = [
   "/health",
   "/",
   // Only allow websocket connections without API key
+  "/collaboration",
   "/collaboration/.websocket",
 ];
 

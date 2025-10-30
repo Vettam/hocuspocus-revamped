@@ -189,8 +189,12 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
   } finally {
     // Always disconnect the direct connection
     // This will trigger onStoreDocument and save the changes
-    await directConnection.disconnect();
-    logger.debug("Direct connection disconnected and changes saved", { roomId });
+    try {
+      await directConnection.disconnect();
+      logger.debug("Direct connection disconnected and changes saved", { roomId });
+    } catch (disconnectError) {
+      logger.error("Error disconnecting direct connection", { roomId, error: (disconnectError as Error).message });
+    }
   }
 }));
 
