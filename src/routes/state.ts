@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { documentService } from "../services/document";
+import { hocuspocusInstance } from "../services/hocuspocus-instance";
 import { logger } from "../config/logger";
 import { 
   markdownToTiptapJson, 
@@ -41,9 +41,21 @@ stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, 
 
   logger.info("Getting room state as markdown", { roomId, draftId, versionId });
 
+  // Get Hocuspocus instance
+  const hocuspocus = hocuspocusInstance.getInstance();
+
+  // Open a direct connection to load/access the document
+  const directConnection = await hocuspocus.openDirectConnection(roomId, {
+    room_id: roomId,
+  });
+
   try {
-    // Get the YDoc for the room
-    const yDoc = documentService.getDocument(roomId);
+    // Get the YDoc from the direct connection
+    if (!directConnection.document) {
+      throw ErrorFactory.internal("Failed to load document");
+    }
+
+    const yDoc = directConnection.document;
 
     // Convert YDoc to TipTap JSON using the schema
     const tiptapJsonString = yDocToJSON(yDoc, schema, "default");
@@ -74,6 +86,14 @@ stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, 
       throw ErrorFactory.notFound(`Document for room ${roomId}`);
     }
     throw ErrorFactory.internal(`Failed to get room state: ${(error as Error).message}`);
+  } finally {
+    // Always disconnect the direct connection
+    try {
+      await directConnection.disconnect();
+    } catch (disconnectError) {
+      logger.error("Error disconnecting direct connection", { roomId, error: (disconnectError as Error).message });
+    }
+    logger.debug("Direct connection disconnected", { roomId });
   }
 }));
 
@@ -116,25 +136,35 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
     contentLength: content.length,
   });
 
+  // Get Hocuspocus instance
+  const hocuspocus = hocuspocusInstance.getInstance();
+
+  // Open a direct connection to load/access the document
+  const directConnection = await hocuspocus.openDirectConnection(roomId, {
+    room_id: roomId,
+  });
+
   try {
     // Convert markdown to TipTap JSON
     const tiptapJson = markdownToTiptapJson(content);
 
     logger.info("Markdown converted to TipTap JSON", {
-      tiptapJson,
+      roomId,
+      tiptapJsonLength: JSON.stringify(tiptapJson).length,
     });
 
-    // Get the YDoc for the room
-    const yDoc = documentService.getDocument(roomId);
+    // Ensure document is loaded
+    if (!directConnection.document) {
+      throw ErrorFactory.internal("Failed to load document");
+    }
 
     // Convert TipTap JSON to YDoc using the schema
-    jsonToYDoc(JSON.stringify(tiptapJson), yDoc, schema, "default");
-    logger.info("TipTap JSON loaded into YDoc", { roomId });
+    // This updates the document in a transaction and auto-saves
+    await directConnection.transact((doc) => {
+      jsonToYDoc(JSON.stringify(tiptapJson), doc, schema, "default");
+    });
 
-    // Save the snapshot using documentService
-    await documentService.saveSnapshot(roomId);
-
-    logger.info("Document snapshot saved successfully", { roomId });
+    logger.info("TipTap JSON loaded into YDoc and saved", { roomId });
 
     // Return success response
     return res.status(200).json({
@@ -155,6 +185,15 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
       throw ErrorFactory.validation("Failed to convert markdown content");
     } else {
       throw ErrorFactory.internal(`Failed to update room state: ${errorMessage}`);
+    }
+  } finally {
+    // Always disconnect the direct connection
+    // This will trigger onStoreDocument and save the changes
+    try {
+      await directConnection.disconnect();
+      logger.debug("Direct connection disconnected and changes saved", { roomId });
+    } catch (disconnectError) {
+      logger.error("Error disconnecting direct connection", { roomId, error: (disconnectError as Error).message });
     }
   }
 }));

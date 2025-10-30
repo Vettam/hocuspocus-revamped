@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { createHash } from "node:crypto";
-import { isDevelopment, serverConfig } from "../config";
+import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { ErrorFactory } from "../utils";
 
@@ -8,12 +8,7 @@ import { ErrorFactory } from "../utils";
  * Generate API key using the same logic as VettamAPIService
  */
 function generateApiKey(): string {
-  const year = new Date().getFullYear();
-  const month = new Date().getMonth() + 1;
-  const day = new Date().getDate();
-  const date = `${year}-${month.toString().padStart(2, "0")}-${day
-    .toString()
-    .padStart(2, "0")}`;
+const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
   return createHash("sha256")
     .update(`${date}${serverConfig.vettam.apiKey}`, "utf8")
@@ -55,10 +50,6 @@ function isOpenLocation(
  */
 function createApiKeyMiddleware(openLocations: (string | RegExp)[] = []) {
   return (req: Request, _res: Response, next: NextFunction) => {
-    // Bypass API key check in development mode
-    if (isDevelopment) {
-      return next();
-    }
 
     const requestPath = req.path;
 
@@ -114,8 +105,9 @@ function createApiKeyMiddleware(openLocations: (string | RegExp)[] = []) {
 export const DEFAULT_OPEN_LOCATIONS = [
   "/health",
   "/",
-  // WebSocket endpoints
-  /^\/collaboration.*/,
+  // Only allow websocket connections without API key
+  "/collaboration",
+  "/collaboration/.websocket",
 ];
 
 /**
