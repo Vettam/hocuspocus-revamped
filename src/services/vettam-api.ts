@@ -234,7 +234,7 @@ export class VettamAPIService {
    */
   async healthCheck(): Promise<boolean> {
     try {
-      const response = await this.client.get("/v1/health");
+      const response = await this.client.get("/v1/health/");
       return response.status === 200;
     } catch (error) {
       logger.warn("Vettam API health check failed", {

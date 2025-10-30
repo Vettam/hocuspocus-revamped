@@ -44,7 +44,7 @@ export class StandardError extends Error {
  */
 export class ErrorFactory {
   static authentication(
-    message: string = "Authentication required"
+    message: string | undefined = "Authentication required"
   ): StandardError {
     return new StandardError(message, ErrorType.AUTHENTICATION_ERROR, 401);
   }
