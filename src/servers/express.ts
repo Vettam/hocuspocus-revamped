@@ -7,6 +7,7 @@ import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
 import { documentService } from "../services/document";
+import { hocuspocusInstance } from "../services/hocuspocus-instance";
 import { handleErrorResponse } from "../utils";
 import {
   apiKeyMiddleware,
@@ -49,15 +50,35 @@ export class ExpressServer {
         }
       },
 
-      // Document loading hook - Let Hocuspocus create the document
-      // We'll load the initial state in afterLoadDocument
+      // Document loading hook - Load document state from API
+      // Return a Y.Doc with data so Hocuspocus uses it directly
       onLoadDocument: async (data) => {
-        const roomId = data.context.room_id;
-        logger.debug("onLoadDocument called for room", { roomId });
+        const roomId = data.context?.room_id || data.documentName;
+        logger.info("onLoadDocument called for room", { roomId });
 
-        // Return undefined to let Hocuspocus create a new empty YDoc
-        // We'll populate it in afterLoadDocument
-        return undefined;
+        try {
+          // Extract draftId and versionId from roomId
+          const draftId = documentService.extractDraftId(roomId);
+          const versionId = documentService.extractVersionId(roomId);
+
+          logger.info("Loading document from API", { roomId, draftId, versionId });
+
+          // Load the Y.Doc from the Vettam API
+          const loadedYDoc = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
+
+          logger.info("Document loaded successfully from API", { roomId });
+
+          // Return the loaded Y.Doc to Hocuspocus
+          // Hocuspocus will apply this state to its own document
+          return loadedYDoc;
+        } catch (error) {
+          logger.warn("Failed to load document from API, starting with empty document", {
+            roomId,
+            error: (error as Error).message,
+          });
+          // Return undefined to start with an empty document
+          return undefined;
+        }
       },
 
       // Document creation hook
@@ -72,7 +93,7 @@ export class ExpressServer {
         logger.info("Client connected to document", { documentName });
       },
 
-      // After document is loaded/created - load initial state and register
+      // After document is loaded/created - register with document service
       afterLoadDocument: async (data) => {
         const roomId = data.context?.room_id || data.documentName;
 
@@ -81,12 +102,10 @@ export class ExpressServer {
         });
 
         // Register Hocuspocus's YDoc instance with our service
+        // At this point, the document already has data loaded from onLoadDocument
         documentService.registerHocuspocusDocument(roomId, data.document);
 
-        // Load initial state from API into this YDoc
-        await documentService.loadInitialStateFromAPI(roomId, data.document);
-
-        logger.info("Document registered and initial state loaded", { roomId });
+        logger.info("Document registered with service", { roomId });
       },
 
       // Connection closed hook
@@ -125,6 +144,9 @@ export class ExpressServer {
     this.setupMiddleware();
     this.setupRoutes();
     this.setupErrorHandling();
+
+    // Register Hocuspocus instance in singleton service for routes to access
+    hocuspocusInstance.setInstance(this.hocuspocus);
   }
 
   /**
@@ -437,6 +459,13 @@ export class ExpressServer {
    */
   getInstance(): any {
     return this.app;
+  }
+
+  /**
+   * Get Hocuspocus instance (for REST API routes to open direct connections)
+   */
+  getHocuspocus(): Hocuspocus {
+    return this.hocuspocus;
   }
 }
 
