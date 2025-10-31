@@ -39,9 +39,9 @@ test('matchUUID returns false for non-UUID string', (t) => {
   t.false(RegexMatcher.matchUUID('not-a-uuid'));
 });
 
-test('matchUUID returns true for UUID with extra characters (regex matches substring)', (t) => {
+test('matchUUID returns false for UUID with extra characters', (t) => {
   const uuidWithExtra = 'prefix-550e8400-e29b-41d4-a716-446655440000';
-  // Note: The regex uses test() which finds a match anywhere in the string
+  // Note: The anchored regex requires an exact full-string match
   t.false(RegexMatcher.matchUUID(uuidWithExtra));
 });
 
