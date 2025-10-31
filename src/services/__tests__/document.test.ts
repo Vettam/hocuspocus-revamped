@@ -2,7 +2,6 @@ import test from "ava";
 import * as Y from "yjs";
 import sinon from "sinon";
 import { DocumentService } from "../document";
-// import { vettamAPI } from "../vettam-api";
 import { logger } from "../../config/logger";
 
 // Mocks
