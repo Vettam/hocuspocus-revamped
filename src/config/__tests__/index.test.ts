@@ -34,21 +34,33 @@ test("serverConfig - should have correct bind host", (t) => {
 });
 
 test("serverConfig - should parse PUBLIC_HOST from environment", (t) => {
-  t.truthy(serverConfig.host.publicHost);
-  t.is(typeof serverConfig.host.publicHost, "string");
+  // Clear module cache and re-require to get updated config
+  delete require.cache[require.resolve("../index")];
+  const { serverConfig: reloadedConfig } = require("../index");
+
+  t.truthy(reloadedConfig.host.publicHost);
+  t.is(typeof reloadedConfig.host.publicHost, "string");
 });
 
 test("serverConfig - should have JWT configuration", (t) => {
-  t.truthy(serverConfig.jwt.secret);
-  t.truthy(serverConfig.jwt.algorithm);
-  t.truthy(serverConfig.jwt.audience);
-  t.truthy(serverConfig.jwt.issuer);
+  // Clear module cache and re-require to get updated config
+  delete require.cache[require.resolve("../index")];
+  const { serverConfig: reloadedConfig } = require("../index");
+
+  t.truthy(reloadedConfig.jwt.secret);
+  t.truthy(reloadedConfig.jwt.algorithm);
+  t.truthy(reloadedConfig.jwt.audience);
+  t.truthy(reloadedConfig.jwt.issuer);
 });
 
 test("serverConfig - should have Vettam API configuration", (t) => {
-  t.truthy(serverConfig.vettam.apiUrl);
-  t.truthy(serverConfig.vettam.apiKey);
-  t.is(typeof serverConfig.vettam.timeout, "number");
+  // Clear module cache and re-require to get updated config
+  delete require.cache[require.resolve("../index")];
+  const { serverConfig: reloadedConfig } = require("../index");
+
+  t.truthy(reloadedConfig.vettam.apiUrl);
+  t.truthy(reloadedConfig.vettam.apiKey);
+  t.is(typeof reloadedConfig.vettam.timeout, "number");
 });
 
 test("serverConfig - should have CORS configuration", (t) => {
