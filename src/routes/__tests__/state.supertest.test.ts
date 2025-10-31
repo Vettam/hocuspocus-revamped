@@ -192,6 +192,9 @@ test.serial(
       )
       .send({ content: "" });
 
-    t.assert(res.status >= 400 || res.status < 500);
+    t.assert(
+      res.status >= 200 && res.status < 300,
+      "Empty string should be accepted"
+    );
   }
 );
