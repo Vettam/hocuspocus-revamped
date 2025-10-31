@@ -5,10 +5,7 @@ import { DocumentService } from "../document";
 import { logger } from "../../config/logger";
 
 // Mocks
-sinon.stub(logger, "info");
-sinon.stub(logger, "warn");
-sinon.stub(logger, "error");
-sinon.stub(logger, "debug");
+
 
 // Helper
 function createRoomId() {
@@ -17,6 +14,10 @@ function createRoomId() {
 
 test.beforeEach(() => {
   sinon.restore();
+  sinon.stub(logger, "info");
+  sinon.stub(logger, "warn");
+  sinon.stub(logger, "error");
+  sinon.stub(logger, "debug");
 });
 
 test("registerHocuspocusDocument stores Y.Doc and sets dirty flag", (t) => {

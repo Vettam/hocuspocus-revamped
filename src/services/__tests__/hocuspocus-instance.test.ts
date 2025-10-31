@@ -1,28 +1,16 @@
 import test from "ava";
+import sinon from "sinon";
+import { logger } from "../../config/logger";
 import { Hocuspocus } from "@hocuspocus/server";
+import { HocuspocusInstanceService } from "../hocuspocus-instance";
 
-// We need to import the class itself, not the singleton
-// The service file only exports the singleton instance by default
-class HocuspocusInstanceService {
-  private instance: Hocuspocus | null = null;
-
-  setInstance(hocuspocus: Hocuspocus): void {
-    this.instance = hocuspocus;
-  }
-
-  getInstance(): Hocuspocus {
-    if (!this.instance) {
-      throw new Error(
-        "Hocuspocus instance not initialized. Call setInstance() first."
-      );
-    }
-    return this.instance;
-  }
-
-  isInitialized(): boolean {
-    return this.instance !== null;
-  }
-}
+test.beforeEach(() => {
+  sinon.restore();
+  sinon.stub(logger, "info");
+  sinon.stub(logger, "warn");
+  sinon.stub(logger, "error");
+  sinon.stub(logger, "debug");
+});
 
 // Helper to create a fresh instance for each test
 function createFreshService(): HocuspocusInstanceService {
@@ -39,9 +27,9 @@ function createMockHocuspocus(): Hocuspocus {
 }
 
 // isInitialized() tests
+
 test("isInitialized returns false when instance not set", (t) => {
   const service = createFreshService();
-
   t.false(service.isInitialized());
 });
 
@@ -83,10 +71,13 @@ test("setInstance allows overwriting existing instance", (t) => {
 
   service.setInstance(mockHocuspocus1);
 
-  // Overwrite should not throw (logs warning but allows it)
+  // Overwrite should not throw
   t.notThrows(() => {
     service.setInstance(mockHocuspocus2);
   });
+
+  // Should log a warning
+  t.true((logger.warn as sinon.SinonStub).calledWithMatch("already set"));
 
   // Should return the second instance
   t.is(service.getInstance(), mockHocuspocus2);
