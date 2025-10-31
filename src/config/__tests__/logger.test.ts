@@ -1,20 +1,103 @@
-// Set up test environment variables BEFORE importing modules
-process.env.JWT_SECRET =
-  "test-secret-key-at-least-32-characters-long-for-testing";
-process.env.JWT_ALGORITHM = "HS256";
-process.env.JWT_AUDIENCE = "authenticated";
-process.env.JWT_ISSUER = "https://test.supabase.co/auth/v1";
-process.env.VETTAM_API_KEY = "test-api-key";
-process.env.VETTAM_API_URL = "https://test-api.example.com";
-process.env.PUBLIC_HOST = "test.example.com";
-
 import test from "ava";
-import { LogLevel } from "../logger";
+
+// --- DEBUG LOG TESTS (must be first to ensure logger is constructed with DEBUG=true) ---
+test.serial("Logger - debug method should accept message only", (t) => {
+  process.env.DEBUG = "true";
+  delete require.cache[require.resolve("../logger")];
+  const { logger } = require("../logger");
+
+  const originalLog = console.log;
+  let capturedOutput = "";
+
+  console.log = (msg) => {
+    capturedOutput = msg;
+  };
+
+  logger.debug("Debug message");
+
+  console.log = originalLog;
+
+  t.true(capturedOutput.includes("DEBUG"));
+  t.true(capturedOutput.includes("Debug message"));
+});
+
+test.serial(
+  "Logger - debug method should accept message with metadata",
+  (t) => {
+    process.env.DEBUG = "true";
+    delete require.cache[require.resolve("../logger")];
+    const { logger } = require("../logger");
+
+    const originalLog = console.log;
+    let capturedOutput = "";
+
+    console.log = (msg) => {
+      capturedOutput = msg;
+    };
+
+    const meta = { variable: "value", count: 42 };
+    logger.debug("Debugging info", meta);
+
+    console.log = originalLog;
+
+    t.true(capturedOutput.includes("DEBUG"));
+    t.true(capturedOutput.includes("Debugging info"));
+    t.true(capturedOutput.includes('"variable":"value"'));
+    t.true(capturedOutput.includes('"count":42'));
+  }
+);
+
+test.serial(
+  "Logger - all log levels should work with same logger instance",
+  (t) => {
+    process.env.DEBUG = "true";
+    delete require.cache[require.resolve("../logger")];
+    const { logger } = require("../logger");
+
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    const originalLog = console.log;
+
+    const outputs: string[] = [];
+
+    console.error = (msg: string) => outputs.push(msg);
+    console.warn = (msg: string) => outputs.push(msg);
+    console.log = (msg: string) => outputs.push(msg);
+
+    logger.error("Error");
+    logger.warn("Warning");
+    logger.info("Info");
+    logger.debug("Debug");
+
+    console.error = originalError;
+    console.warn = originalWarn;
+    console.log = originalLog;
+
+    t.true(outputs.length >= 4);
+    t.true(outputs.some((o) => o.includes("ERROR")));
+    t.true(outputs.some((o) => o.includes("WARN")));
+    t.true(outputs.some((o) => o.includes("INFO")));
+    t.true(outputs.some((o) => o.includes("DEBUG")));
+  }
+);
 
 // We need to test the Logger class behavior
 // Since logger is a singleton, we'll test its behavior through different scenarios
 
+test.beforeEach(() => {
+  // Set up test environment variables BEFORE importing modules
+  process.env.JWT_SECRET =
+    "test-secret-key-at-least-32-characters-long-for-testing";
+  process.env.JWT_ALGORITHM = "HS256";
+  process.env.JWT_AUDIENCE = "authenticated";
+  process.env.JWT_ISSUER = "https://test.supabase.co/auth/v1";
+  process.env.VETTAM_API_KEY = "test-api-key";
+  process.env.VETTAM_API_URL = "https://test-api.example.com";
+  process.env.PUBLIC_HOST = "test.example.com";
+});
+
 test.serial("LogLevel enum - should have correct values", (t) => {
+  const { LogLevel } = require("../logger");
   t.is(LogLevel.ERROR, 0);
   t.is(LogLevel.WARN, 1);
   t.is(LogLevel.INFO, 2);
@@ -22,6 +105,7 @@ test.serial("LogLevel enum - should have correct values", (t) => {
 });
 
 test.serial("LogLevel enum - should have correct hierarchy", (t) => {
+  const { LogLevel } = require("../logger");
   t.true(LogLevel.ERROR < LogLevel.WARN);
   t.true(LogLevel.WARN < LogLevel.INFO);
   t.true(LogLevel.INFO < LogLevel.DEBUG);
@@ -157,48 +241,6 @@ test.serial("Logger - info method should accept message with metadata", (t) => {
   t.true(capturedOutput.includes('"requestId":"abc-123"'));
   t.true(capturedOutput.includes('"duration":250'));
 });
-
-test.serial("Logger - debug method should accept message only", (t) => {
-  const { logger } = require("../logger");
-
-  const originalLog = console.log;
-  let capturedOutput = "";
-
-  console.log = (msg: string) => {
-    capturedOutput = msg;
-  };
-
-  logger.debug("Debug message");
-
-  console.log = originalLog;
-
-  t.true(capturedOutput.includes("DEBUG"));
-  t.true(capturedOutput.includes("Debug message"));
-});
-
-test.serial(
-  "Logger - debug method should accept message with metadata",
-  (t) => {
-    const { logger } = require("../logger");
-
-    const originalLog = console.log;
-    let capturedOutput = "";
-
-    console.log = (msg: string) => {
-      capturedOutput = msg;
-    };
-
-    const meta = { variable: "value", count: 42 };
-    logger.debug("Debugging info", meta);
-
-    console.log = originalLog;
-
-    t.true(capturedOutput.includes("DEBUG"));
-    t.true(capturedOutput.includes("Debugging info"));
-    t.true(capturedOutput.includes('"variable":"value"'));
-    t.true(capturedOutput.includes('"count":42'));
-  }
-);
 
 test.serial("Logger - should handle complex metadata objects", (t) => {
   const { logger } = require("../logger");
@@ -407,39 +449,6 @@ test.serial("Logger - should export default logger", (t) => {
   t.is(typeof logger.info, "function");
   t.is(typeof logger.debug, "function");
 });
-
-test.serial(
-  "Logger - all log levels should work with same logger instance",
-  (t) => {
-    const { logger } = require("../logger");
-
-    const originalError = console.error;
-    const originalWarn = console.warn;
-    const originalLog = console.log;
-
-    const outputs: string[] = [];
-
-    console.error = (msg: string) => outputs.push(msg);
-    console.warn = (msg: string) => outputs.push(msg);
-    console.log = (msg: string) => outputs.push(msg);
-
-    logger.error("Error");
-    logger.warn("Warning");
-    logger.info("Info");
-    logger.debug("Debug");
-
-    console.error = originalError;
-    console.warn = originalWarn;
-    console.log = originalLog;
-
-    // In test environment (DEBUG=true by default), all levels should log
-    t.true(outputs.length >= 4);
-    t.true(outputs.some((o) => o.includes("ERROR")));
-    t.true(outputs.some((o) => o.includes("WARN")));
-    t.true(outputs.some((o) => o.includes("INFO")));
-    t.true(outputs.some((o) => o.includes("DEBUG")));
-  }
-);
 
 test.serial(
   "Logger - should handle circular references in metadata gracefully",

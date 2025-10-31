@@ -1,10 +1,10 @@
 import test from "ava";
-import {
-  ErrorFactory,
-  ErrorType,
-  StandardError,
-  sanitizeErrorMessage,
-} from "../error-handling";
+import { ErrorFactory, ErrorType, StandardError } from "../error-handling";
+
+test.beforeEach(() => {
+  delete require.cache[require.resolve("../../config")];
+  delete require.cache[require.resolve("../error-handling")];
+});
 
 // ErrorFactory tests
 test("ErrorFactory.authentication creates auth error with default message", (t) => {
@@ -112,9 +112,14 @@ test("StandardError can be marked as non-operational", (t) => {
 
 // sanitizeErrorMessage tests
 test("sanitizeErrorMessage returns message for StandardError", (t) => {
+  const originalDebug = process.env.DEBUG;
+  process.env.DEBUG = "true"; // Set to dev mode to ensure proper behavior
+
+  const { sanitizeErrorMessage } = require("../error-handling");
   const error = ErrorFactory.validation("Test validation error");
   const message = sanitizeErrorMessage(error);
   t.is(message, "Test validation error");
+  process.env.DEBUG = originalDebug;
 });
 
 test("sanitizeErrorMessage returns generic message for non-StandardError in production", (t) => {
@@ -122,6 +127,7 @@ test("sanitizeErrorMessage returns generic message for non-StandardError in prod
   const originalEnv = process.env.NODE_ENV;
   process.env.NODE_ENV = "production";
 
+  const { sanitizeErrorMessage } = require("../error-handling");
   const error = new Error("Internal database error");
   const message = sanitizeErrorMessage(error);
 
@@ -132,21 +138,79 @@ test("sanitizeErrorMessage returns generic message for non-StandardError in prod
   process.env.NODE_ENV = originalEnv;
 });
 
-test("sanitizeErrorMessage returns error message in test environment", (t) => {
-  const error = new Error("Test error message");
-  const message = sanitizeErrorMessage(error);
-  t.is(message, "Test error message");
+test.serial(
+  "sanitizeErrorMessage returns error message in prod environment",
+  (t) => {
+    const originalDebug = process.env.DEBUG;
+    process.env.DEBUG = "false";
+
+    const { sanitizeErrorMessage } = require("../error-handling");
+    const error = new Error("Test error message");
+    const message = sanitizeErrorMessage(error);
+    t.is(message, "An internal error occurred");
+    process.env.DEBUG = originalDebug;
+  }
+);
+
+// Tests that require dynamic module loading due to environment dependencies
+test.serial.beforeEach(() => {
+  delete require.cache[require.resolve("../../config")];
+  delete require.cache[require.resolve("../error-handling")];
 });
 
-test("sanitizeErrorMessage includes stack trace when requested", (t) => {
-  const error = new Error("Test error with stack");
-  const message = sanitizeErrorMessage(error, true);
-  t.true(message.includes("Test error with stack"));
-  t.true(message.includes("at"));
-});
+test.serial(
+  "sanitizeErrorMessage returns error message in dev environment",
+  (t) => {
+    const originalDebug = process.env.DEBUG;
+    process.env.DEBUG = "true";
+    const { sanitizeErrorMessage } = require("../error-handling");
+    const error = new Error("Test error message");
+    const message = sanitizeErrorMessage(error);
+    t.is(message, "Test error message");
+    process.env.DEBUG = originalDebug;
+  }
+);
 
-test("sanitizeErrorMessage handles error without message", (t) => {
+test.serial(
+  "sanitizeErrorMessage includes stack trace when requested in dev",
+  (t) => {
+    const originalDebug = process.env.DEBUG;
+    process.env.DEBUG = "true";
+    const { sanitizeErrorMessage } = require("../error-handling");
+    const error = new Error("Test error with stack");
+    error.stack =
+      "Error: Test error with stack\n    at someFunction (file.js:10:5)\n    at anotherFunction (file.js:20:10)";
+
+    const message = sanitizeErrorMessage(error, true);
+    console.log(message);
+    t.true(message.includes("Test error with stack"));
+    t.true(message.includes("at"));
+    process.env.DEBUG = originalDebug;
+  }
+);
+
+test.serial(
+  "sanitizeErrorMessage includes stack trace when requested in prod",
+  (t) => {
+    const originalDebug = process.env.DEBUG;
+    process.env.DEBUG = "false";
+    const { sanitizeErrorMessage } = require("../error-handling");
+    const error = new Error("Test error with stack");
+    error.stack =
+      "Error: Test error with stack\n    at someFunction (file.js:10:5)\n    at anotherFunction (file.js:20:10)";
+
+    const message = sanitizeErrorMessage(error, true);
+    t.is(message, "An internal error occurred");
+    process.env.DEBUG = originalDebug;
+  }
+);
+
+test.serial("sanitizeErrorMessage handles error without message", (t) => {
+  const originalDebug = process.env.DEBUG;
+  process.env.DEBUG = "true";
+  const { sanitizeErrorMessage } = require("../error-handling");
   const error = { stack: "some stack trace" };
   const message = sanitizeErrorMessage(error);
   t.is(message, "Unknown error");
+  process.env.DEBUG = originalDebug;
 });
