@@ -5,7 +5,7 @@ import { logger } from "../config/logger";
  * Singleton service to hold the Hocuspocus instance
  * This allows routes and other services to access the Hocuspocus instance
  */
-class HocuspocusInstanceService {
+export class HocuspocusInstanceService {
   private instance: Hocuspocus | null = null;
 
   /**
@@ -24,7 +24,9 @@ class HocuspocusInstanceService {
    */
   getInstance(): Hocuspocus {
     if (!this.instance) {
-      throw new Error("Hocuspocus instance not initialized. Call setInstance() first.");
+      throw new Error(
+        "Hocuspocus instance not initialized. Call setInstance() first."
+      );
     }
     return this.instance;
   }
