@@ -1,5 +1,8 @@
 export default {
-  files: ['tests/**/*.test.ts', 'src/**/__tests__/**/*.test.ts'],
+  files: [
+    'src/**/*.test.ts',
+    'src/**/__tests__/*.ts'
+  ],
   extensions: ['ts'],
   require: ['ts-node/register'],
   timeout: '60s',
