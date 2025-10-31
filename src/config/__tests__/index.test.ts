@@ -1,5 +1,5 @@
 import test from "ava";
-import { validateConfig, isDevelopment, serverConfig } from "../index";
+import { validateConfig, serverConfig } from "../index";
 
 // Store original env values
 const originalEnv = { ...process.env };
@@ -20,10 +20,17 @@ test.beforeEach(() => {
 
 test.afterEach(() => {
   // Restore original environment
-  process.env = { ...originalEnv };
+  // Remove any keys introduced during the test
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) {
+      delete process.env[key];
+    }
+  }
+  // Restore original values
+  Object.assign(process.env, originalEnv);
 });
 
-test("serverConfig - should have correct default port", (t) => {
+test.serial("serverConfig - should have correct default port", (t) => {
   t.is(typeof serverConfig.port.express, "number");
   t.true(serverConfig.port.express >= 1);
   t.true(serverConfig.port.express <= 65535);
@@ -73,8 +80,11 @@ test("serverConfig - should have CORS configuration", (t) => {
   t.is(typeof serverConfig.cors.credentials, "boolean");
 });
 
-test("isDevelopment - should be false when DEBUG is false", (t) => {
-  t.is(typeof isDevelopment, "boolean");
+test.serial("isDevelopment - should be false when DEBUG is false", (t) => {
+  process.env.DEBUG = "false";
+  delete require.cache[require.resolve("../index")];
+  const { isDevelopment: reloadedIsDev } = require("../index");
+  t.false(reloadedIsDev);
 });
 
 test("validateConfig - should not throw with valid configuration", (t) => {
