@@ -62,7 +62,7 @@ function createApiKeyMiddleware(openLocations: (string | RegExp)[] = []) {
     }
 
     // Get API key from header
-    const providedApiKey = req.headers["x-api-key"] as string;
+    const providedApiKey = req.headers?.["x-api-key"] as string | undefined;
 
     if (!providedApiKey) {
       logger.warn("API key missing in request", {
