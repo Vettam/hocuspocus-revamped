@@ -114,3 +114,4 @@ export const DEFAULT_OPEN_LOCATIONS = [
  * Pre-configured middleware with default open locations
  */
 export const apiKeyMiddleware = createApiKeyMiddleware(DEFAULT_OPEN_LOCATIONS);
+export { generateApiKey }
