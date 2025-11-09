@@ -8,7 +8,13 @@ import { ErrorFactory } from "../utils";
  * Generate API key using the same logic as VettamAPIService
  */
 function generateApiKey(): string {
-const date = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  const day = now.getUTCDate();
+  const date = `${year}-${month.toString().padStart(2, "0")}-${day
+    .toString()
+    .padStart(2, "0")}`;
 
   return createHash("sha256")
     .update(`${date}${serverConfig.vettam.apiKey}`, "utf8")
@@ -50,7 +56,6 @@ function isOpenLocation(
  */
 function createApiKeyMiddleware(openLocations: (string | RegExp)[] = []) {
   return (req: Request, _res: Response, next: NextFunction) => {
-
     const requestPath = req.path;
 
     // Check if this path is in open locations
@@ -114,4 +119,4 @@ export const DEFAULT_OPEN_LOCATIONS = [
  * Pre-configured middleware with default open locations
  */
 export const apiKeyMiddleware = createApiKeyMiddleware(DEFAULT_OPEN_LOCATIONS);
-export { generateApiKey }
+export { generateApiKey };
