@@ -62,7 +62,7 @@ function createAuthRequest(
 }
 
 // authorizeUser tests
-test("authorizeUser successfully authorizes user", async (t) => {
+test.serial("authorizeUser successfully authorizes user", async (t) => {
   const request = {
     userJwt: "test-jwt-token",
     userId: "user-123",
@@ -96,7 +96,7 @@ test("authorizeUser successfully authorizes user", async (t) => {
   t.deepEqual(result, expectedResponse);
 });
 
-test("authorizeUser sends correct request body", async (t) => {
+test.serial("authorizeUser sends correct request body", async (t) => {
   const request = createAuthRequest();
 
   mock
@@ -123,7 +123,7 @@ test("authorizeUser sends correct request body", async (t) => {
   await apiService.authorizeUser(request);
 });
 
-test("authorizeUser includes API key header", async (t) => {
+test.serial("authorizeUser includes API key header", async (t) => {
   const request = createAuthRequest();
 
   const expectedApiKey = generateApiKey();
@@ -151,7 +151,7 @@ test("authorizeUser includes API key header", async (t) => {
   await apiService.authorizeUser(request);
 });
 
-test("authorizeUser throws error when status is not success", async (t) => {
+test.serial("authorizeUser throws error when status is not success", async (t) => {
   const request = createAuthRequest();
 
   mock
@@ -171,7 +171,7 @@ test("authorizeUser throws error when status is not success", async (t) => {
   t.true(error.message.includes("User not authorized"));
 });
 
-test("authorizeUser throws error when data is missing", async (t) => {
+test.serial("authorizeUser throws error when data is missing", async (t) => {
   const request = createAuthRequest();
 
   mock
@@ -191,7 +191,7 @@ test("authorizeUser throws error when data is missing", async (t) => {
   t.true(error.message.includes("Authorization failed"));
 });
 
-test("authorizeUser handles network errors", async (t) => {
+test.serial("authorizeUser handles network errors", async (t) => {
   const request = createAuthRequest();
 
   mock
@@ -208,7 +208,7 @@ test("authorizeUser handles network errors", async (t) => {
   t.true(error.message.includes("Authorization failed"));
 });
 
-test("authorizeUser handles 500 server errors", async (t) => {
+test.serial("authorizeUser handles 500 server errors", async (t) => {
   const request = createAuthRequest();
 
   mock
@@ -225,7 +225,7 @@ test("authorizeUser handles 500 server errors", async (t) => {
 });
 
 // loadDocumentFromDraft tests
-test("loadDocumentFromDraft successfully loads document", async (t) => {
+test.serial("loadDocumentFromDraft successfully loads document", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const signedUrl = "https://storage.example.com/signed-url";
@@ -256,7 +256,7 @@ test("loadDocumentFromDraft successfully loads document", async (t) => {
   t.true(result instanceof Y.Doc);
 });
 
-test("loadDocumentFromDraft includes API key header", async (t) => {
+test.serial("loadDocumentFromDraft includes API key header", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const signedUrl = "https://storage.example.com/signed-url";
@@ -277,7 +277,7 @@ test("loadDocumentFromDraft includes API key header", async (t) => {
   globalMock.restore();
 });
 
-test("loadDocumentFromDraft throws error when status is not success", async (t) => {
+test.serial("loadDocumentFromDraft throws error when status is not success", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
 
@@ -294,7 +294,7 @@ test("loadDocumentFromDraft throws error when status is not success", async (t) 
   t.true(error.message.includes("Document not found"));
 });
 
-test("loadDocumentFromDraft throws error when data is missing", async (t) => {
+test.serial("loadDocumentFromDraft throws error when data is missing", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
 
@@ -313,7 +313,7 @@ test("loadDocumentFromDraft throws error when data is missing", async (t) => {
 
 // NOTE: These tests are skipped because the service uses axios.get() directly instead of this.client.get()
 // which makes it difficult to mock in unit tests. Consider refactoring the service to use this.client consistently.
-test.skip("loadDocumentFromDraft handles network error on signed URL fetch", async (t) => {
+test.serial.skip("loadDocumentFromDraft handles network error on signed URL fetch", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const signedUrl = "https://storage.example.com/signed-url";
@@ -336,7 +336,7 @@ test.skip("loadDocumentFromDraft handles network error on signed URL fetch", asy
   t.true(error.message.includes("Failed to load document from draft"));
 });
 
-test.skip("loadDocumentFromDraft handles invalid JSON content", async (t) => {
+test.serial.skip("loadDocumentFromDraft handles invalid JSON content", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const signedUrl = "https://storage.example.com/signed-url";
@@ -359,149 +359,249 @@ test.skip("loadDocumentFromDraft handles invalid JSON content", async (t) => {
 });
 
 // saveDocumentSnapshot tests
-test("saveDocumentSnapshot successfully saves snapshot", async (t) => {
+test.serial("saveDocumentSnapshot completes signed upload workflow", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const content = JSON.stringify({ type: "doc", content: [] });
   const checksum = "abc123def456";
-
-  mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
-    .reply(200, {
-      status: "success",
-    });
-
-  await t.notThrowsAsync(async () => {
-    await apiService.saveDocumentSnapshot(
-      draftId,
-      versionId,
-      content,
-      checksum
-    );
-  });
-});
-
-test("saveDocumentSnapshot includes API key header", async (t) => {
-  const draftId = "draft-123";
-  const versionId = "version-456";
-  const content = JSON.stringify({ type: "doc", content: [] });
-  const checksum = "abc123def456";
+  const versionName = "v1";
+  const signedUploadUrl = "https://storage.example.com/upload";
+  const tempPath = "tmp/uploads/doc.json";
   const expectedApiKey = generateApiKey();
 
   mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
     .reply((config: any) => {
+      t.is(config.params.checksum, checksum);
       t.is(config.headers!["api-key"], expectedApiKey);
-      return [200, { status: "success" }];
+      return [
+        200,
+        {
+          status: "success",
+          data: {
+            signed_upload_url: signedUploadUrl,
+            temp_path: tempPath,
+            token: "token",
+            expires_in: 300,
+            upload_instructions: {
+              method: "PUT",
+              content_type: "application/json",
+              note: "Upload JSON",
+            },
+          },
+        },
+      ];
     });
 
-  await apiService.saveDocumentSnapshot(draftId, versionId, content, checksum);
-});
+  const globalMock = new MockAdapter(axios);
+  let uploadCalled = false;
 
-test("saveDocumentSnapshot sends multipart form data", async (t) => {
-  const draftId = "draft-123";
-  const versionId = "version-456";
-  const content = JSON.stringify({ type: "doc", content: [] });
-  const checksum = "abc123def456";
+  globalMock.onPut(signedUploadUrl).reply((config: any) => {
+    uploadCalled = true;
+    t.is(config.headers!["Content-Type"], "application/json");
+    t.is(config.data, content);
+    return [200];
+  });
 
   mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
+    .onPost(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
     .reply((config: any) => {
-      // Check that it's multipart form data
-      t.true(config.headers!["Content-Type"].includes("multipart/form-data"));
-      // Check that data is a FormData-like object
-      t.truthy(config.data);
+      const payload = JSON.parse(config.data);
+      t.is(payload.temp_path, tempPath);
+      t.is(payload.checksum, checksum);
+      t.is(payload.version_name, versionName);
+      t.is(config.headers!["api-key"], expectedApiKey);
+      t.is(config.headers!["Content-Type"], "application/json");
       return [200, { status: "success" }];
     });
 
-  await apiService.saveDocumentSnapshot(draftId, versionId, content, checksum);
+  try {
+    await t.notThrowsAsync(() =>
+      apiService.saveDocumentSnapshot(
+        draftId,
+        versionId,
+        content,
+        checksum,
+        versionName
+      )
+    );
+    t.true(uploadCalled);
+  } finally {
+    globalMock.restore();
+  }
 });
 
-test("saveDocumentSnapshot throws error when status is not success", async (t) => {
+test.serial("saveDocumentSnapshot skips upload when document unchanged", async (t) => {
+  const draftId = "draft-123";
+  const versionId = "version-456";
+  const checksum = "unchanged";
+
+  mock
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(204);
+
+  const globalMock = new MockAdapter(axios);
+  globalMock.onAny().reply(() => {
+    t.fail("Should not call storage upload when document unchanged");
+    return [500];
+  });
+
+  try {
+    await t.notThrowsAsync(() =>
+      apiService.saveDocumentSnapshot(draftId, versionId, "{}", checksum)
+    );
+  } finally {
+    globalMock.restore();
+  }
+});
+
+test.serial("saveDocumentSnapshot fails when storage upload fails", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const content = JSON.stringify({ type: "doc", content: [] });
-  const checksum = "abc123def456";
+  const checksum = "bad-upload";
+  const signedUploadUrl = "https://storage.example.com/upload";
 
   mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
     .reply(200, {
+      status: "success",
+      data: {
+        signed_upload_url: signedUploadUrl,
+        temp_path: "tmp/path",
+        token: "token",
+        expires_in: 300,
+        upload_instructions: {
+          method: "PUT",
+          content_type: "application/json",
+          note: "Upload JSON",
+        },
+      },
+    });
+
+  const globalMock = new MockAdapter(axios);
+  globalMock.onPut(signedUploadUrl).reply(500);
+
+  try {
+    const error = await t.throwsAsync(() =>
+      apiService.saveDocumentSnapshot(draftId, versionId, content, checksum)
+    );
+
+    t.truthy(error);
+    t.true(error.message.includes("Failed to save document snapshot"));
+  } finally {
+    globalMock.restore();
+  }
+});
+
+test.serial("saveDocumentSnapshot throws when commit response is error", async (t) => {
+  const draftId = "draft-123";
+  const versionId = "version-456";
+  const content = JSON.stringify({ type: "doc", content: [] });
+  const checksum = "commit-error";
+  const signedUploadUrl = "https://storage.example.com/upload";
+
+  mock
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(200, {
+      status: "success",
+      data: {
+        signed_upload_url: signedUploadUrl,
+        temp_path: "tmp/path",
+        token: "token",
+        expires_in: 300,
+        upload_instructions: {
+          method: "PUT",
+          content_type: "application/json",
+          note: "Upload JSON",
+        },
+      },
+    });
+
+  const globalMock = new MockAdapter(axios);
+  globalMock.onPut(signedUploadUrl).reply(200);
+
+  mock
+    .onPost(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(200, {
+      status: "error",
+      error: "Commit failed",
+    });
+
+  try {
+    const error = await t.throwsAsync(() =>
+      apiService.saveDocumentSnapshot(draftId, versionId, content, checksum)
+    );
+    t.truthy(error);
+    t.true(error.message.includes("Commit failed"));
+  } finally {
+    globalMock.restore();
+  }
+});
+
+test.serial("saveDocumentSnapshot surfaces validation errors", async (t) => {
+  const draftId = "draft-123";
+  const versionId = "version-456";
+  const content = JSON.stringify({ type: "doc", content: [] });
+  const checksum = "validation-error";
+  const signedUploadUrl = "https://storage.example.com/upload";
+
+  mock
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(200, {
+      status: "success",
+      data: {
+        signed_upload_url: signedUploadUrl,
+        temp_path: "tmp/path",
+        token: "token",
+        expires_in: 300,
+        upload_instructions: {
+          method: "PUT",
+          content_type: "application/json",
+          note: "Upload JSON",
+        },
+      },
+    });
+
+  const globalMock = new MockAdapter(axios);
+  globalMock.onPut(signedUploadUrl).reply(200);
+
+  mock
+    .onPost(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(400, {
       status: "error",
       error: "Checksum mismatch",
     });
 
-  const error = await t.throwsAsync(async () => {
-    await apiService.saveDocumentSnapshot(
-      draftId,
-      versionId,
-      content,
-      checksum
+  try {
+    const error = await t.throwsAsync(() =>
+      apiService.saveDocumentSnapshot(draftId, versionId, content, checksum)
     );
-  });
-
-  t.truthy(error);
-  t.true(error.message.includes("Checksum mismatch"));
+    t.truthy(error);
+    t.true(error.message.includes("Validation failed: Checksum mismatch"));
+  } finally {
+    globalMock.restore();
+  }
 });
 
-test("saveDocumentSnapshot handles network errors", async (t) => {
-  const draftId = "draft-123";
-  const versionId = "version-456";
-  const content = JSON.stringify({ type: "doc", content: [] });
-  const checksum = "abc123def456";
+test.serial("saveDocumentSnapshot throws when draft version is missing", async (t) => {
+  const draftId = "draft-missing";
+  const versionId = "version-missing";
 
   mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
-    .networkError();
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(404, { status: "error", error: "Not found" });
 
-  const error = await t.throwsAsync(async () => {
-    await apiService.saveDocumentSnapshot(
-      draftId,
-      versionId,
-      content,
-      checksum
-    );
-  });
+  const error = await t.throwsAsync(() =>
+    apiService.saveDocumentSnapshot(draftId, versionId, "{}", "checksum")
+  );
 
   t.truthy(error);
-  t.true(error.message.includes("Failed to save document snapshot"));
-});
-
-test("saveDocumentSnapshot handles 500 server errors", async (t) => {
-  const draftId = "draft-123";
-  const versionId = "version-456";
-  const content = JSON.stringify({ type: "doc", content: [] });
-  const checksum = "abc123def456";
-
-  mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
-    .reply(500, { error: "Internal Server Error" });
-
-  const error = await t.throwsAsync(async () => {
-    await apiService.saveDocumentSnapshot(
-      draftId,
-      versionId,
-      content,
-      checksum
-    );
-  });
-
-  t.truthy(error);
+  t.true(error.message.includes(`${draftId}/${versionId} not found`));
 });
 
 // healthCheck tests
-test("healthCheck returns true when API is healthy", async (t) => {
+test.serial("healthCheck returns true when API is healthy", async (t) => {
   mock
     .onGet("https://api.test.vettam.com/v1/health/")
     .reply(200, { status: "ok" });
@@ -511,7 +611,7 @@ test("healthCheck returns true when API is healthy", async (t) => {
   t.true(result);
 });
 
-test("healthCheck returns false when API returns non-200", async (t) => {
+test.serial("healthCheck returns false when API returns non-200", async (t) => {
   mock
     .onGet("https://api.test.vettam.com/v1/health/")
     .reply(500, { error: "Service unavailable" });
@@ -521,7 +621,7 @@ test("healthCheck returns false when API returns non-200", async (t) => {
   t.false(result);
 });
 
-test("healthCheck returns false on network error", async (t) => {
+test.serial("healthCheck returns false on network error", async (t) => {
   mock.onGet("https://api.test.vettam.com/v1/health/").networkError();
 
   const result = await apiService.healthCheck();
@@ -529,7 +629,7 @@ test("healthCheck returns false on network error", async (t) => {
   t.false(result);
 });
 
-test("healthCheck returns false on timeout", async (t) => {
+test.serial("healthCheck returns false on timeout", async (t) => {
   mock.onGet("https://api.test.vettam.com/v1/health/").timeout();
 
   const result = await apiService.healthCheck();
@@ -538,7 +638,7 @@ test("healthCheck returns false on timeout", async (t) => {
 });
 
 // API key generation tests
-test("API key generation is consistent for same date", async (t) => {
+test.serial("API key generation is consistent for same date", async (t) => {
   const request = createAuthRequest();
 
   let capturedApiKey1: string | undefined;
@@ -595,7 +695,7 @@ test("API key generation is consistent for same date", async (t) => {
   t.truthy(capturedApiKey1);
 });
 
-test("API key has correct format (SHA-256 hex)", async (t) => {
+test.serial("API key has correct format (SHA-256 hex)", async (t) => {
   const request = createAuthRequest();
 
   mock
@@ -626,7 +726,7 @@ test("API key has correct format (SHA-256 hex)", async (t) => {
 });
 
 // Edge cases
-test("loadDocumentFromDraft handles empty document", async (t) => {
+test.serial("loadDocumentFromDraft handles empty document", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const signedUrl = "https://storage.example.com/signed-url";
@@ -650,31 +750,56 @@ test("loadDocumentFromDraft handles empty document", async (t) => {
   t.true(result instanceof Y.Doc);
 });
 
-test("saveDocumentSnapshot handles empty content", async (t) => {
+test.serial("saveDocumentSnapshot handles empty content", async (t) => {
   const draftId = "draft-123";
   const versionId = "version-456";
   const content = "";
   const checksum = "empty-checksum";
+  const signedUploadUrl = "https://storage.example.com/upload-empty";
 
   mock
-    .onPost(
-      `https://api.test.vettam.com/internal/drafts/${draftId}/${versionId}/snapshot/`
-    )
+    .onGet(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
     .reply(200, {
       status: "success",
+      data: {
+        signed_upload_url: signedUploadUrl,
+        temp_path: "tmp/empty",
+        token: "token",
+        expires_in: 300,
+        upload_instructions: {
+          method: "PUT",
+          content_type: "application/json",
+          note: "Upload JSON",
+        },
+      },
     });
 
-  await t.notThrowsAsync(async () => {
-    await apiService.saveDocumentSnapshot(
-      draftId,
-      versionId,
-      content,
-      checksum
-    );
+  const globalMock = new MockAdapter(axios);
+  globalMock.onPut(signedUploadUrl).reply((config: any) => {
+    // Axios may stringify empty strings as ""
+    t.true(config.data === content || config.data === '""');
+    return [200];
   });
+
+  mock
+    .onPost(`/internal/drafts/${draftId}/${versionId}/snapshot/`)
+    .reply(200, { status: "success" });
+
+  try {
+    await t.notThrowsAsync(async () => {
+      await apiService.saveDocumentSnapshot(
+        draftId,
+        versionId,
+        content,
+        checksum
+      );
+    });
+  } finally {
+    globalMock.restore();
+  }
 });
 
-test("authorizeUser handles special characters in IDs", async (t) => {
+test.serial("authorizeUser handles special characters in IDs", async (t) => {
   const request = createAuthRequest({
     userId: "user-with-special@chars.com",
     draftId: "draft-123-abc",

@@ -8,7 +8,6 @@ import {
 } from "../types";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
-import FormData from "form-data";
 import { createHash } from "node:crypto";
 import * as Y from "yjs";
 import { jsonToYDoc } from "../utils/ydoc/converters";
@@ -176,53 +175,163 @@ export class VettamAPIService {
   }
 
   /**
-   * Save document snapshot with multipart/form-data
+   * Save document snapshot using two-step signed URL approach
+   * Step 1: Get signed upload URL from backend
+   * Step 2: Upload directly to storage
+   * Step 3: Commit the upload
    */
   async saveDocumentSnapshot(
     draftId: string,
     versionId: string,
     content: string,
-    checksum: string
+    checksum: string,
+    versionName?: string
   ): Promise<void> {
     try {
-      logger.debug("Saving document snapshot", { draftId, checksum });
+      logger.debug("Starting document snapshot save", { draftId, versionId, checksum });
 
-      const formData = new FormData();
-
-      // Create JSON blob with proper filename
-      const contentBuffer = Buffer.from(content, "utf-8");
-      formData.append("file", contentBuffer, {
-        filename: "snapshot.json",
-        contentType: "application/json",
-      });
-      formData.append("checksum", checksum);
-
-      const response = await this.client.post<VettamAPIResponse>(
+      // STEP 1: Request signed upload URL
+      logger.debug("Requesting signed upload URL", { draftId, versionId });
+      
+      const signedUrlResponse = await this.client.get<VettamAPIResponse<{
+        signed_upload_url: string;
+        temp_path: string;
+        token: string;
+        expires_in: number;
+        upload_instructions: {
+          method: string;
+          content_type: string;
+          note: string;
+        };
+      }>>(
         `/internal/drafts/${draftId}/${versionId}/snapshot/`,
-        formData,
         {
+          params: { checksum },
           headers: {
             "api-key": this.getApiKey(),
-            ...formData.getHeaders(),
           },
         }
       );
 
-      if (response.data.status != "success") {
+      // Handle 204 No Content - file unchanged
+      if (signedUrlResponse.status === 204) {
+        logger.info("Document snapshot unchanged - skipping upload", {
+          draftId,
+          versionId,
+          checksum,
+        });
+        return;
+      }
+
+      if (signedUrlResponse.data.status !== "success" || !signedUrlResponse.data.data) {
         throw new Error(
-          response.data.error || "Failed to save document snapshot"
+          signedUrlResponse.data.error || "Failed to get signed upload URL"
         );
       }
 
-      logger.info("Document snapshot saved", {
+      const { signed_upload_url, temp_path, expires_in } = signedUrlResponse.data.data;
+
+      logger.info("Signed upload URL obtained", {
         draftId,
+        versionId,
+        temp_path,
+        expires_in,
+      });
+
+      // STEP 2: Upload directly to storage using signed URL
+      logger.debug("Uploading to storage", { temp_path });
+
+      // Calculate timeout as 80% of expires_in to provide buffer before expiry
+      const uploadTimeout = (expires_in || 300) * 1000 * 0.8;
+
+      const uploadResponse = await axios.put(signed_upload_url, content, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: uploadTimeout,
+      });
+
+      if (uploadResponse.status < 200 || uploadResponse.status >= 300) {
+        throw new Error(
+          `Storage upload failed with status ${uploadResponse.status}`
+        );
+      }
+
+      logger.info("File uploaded to storage", {
+        draftId,
+        versionId,
+        temp_path,
+        status: uploadResponse.status,
+      });
+
+      // STEP 3: Commit the upload
+      logger.debug("Committing upload", { draftId, versionId, temp_path });
+
+      const commitPayload: {
+        temp_path: string;
+        checksum: string;
+        version_name?: string;
+      } = {
+        temp_path,
         checksum,
+      };
+
+      if (versionName) {
+        commitPayload.version_name = versionName;
+      }
+
+      const commitResponse = await this.client.post<VettamAPIResponse>(
+        `/internal/drafts/${draftId}/${versionId}/snapshot/`,
+        commitPayload,
+        {
+          headers: {
+            "api-key": this.getApiKey(),
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (commitResponse.data.status !== "success") {
+        throw new Error(
+          commitResponse.data.error || "Failed to commit document snapshot"
+        );
+      }
+
+      logger.info("Document snapshot committed successfully", {
+        draftId,
+        versionId,
+        checksum,
+        temp_path,
       });
     } catch (error) {
+      const axiosError = error as AxiosError;
+      
+      // Handle specific error cases
+      if (axiosError.response?.status === 400) {
+        const errorData = axiosError.response.data as VettamAPIResponse;
+        logger.error("Validation error during snapshot save", {
+          draftId,
+          versionId,
+          checksum,
+          error: errorData.error,
+        });
+        throw new Error(`Validation failed: ${errorData.error}`);
+      }
+
+      if (axiosError.response?.status === 404) {
+        logger.error("Draft version not found", {
+          draftId,
+          versionId,
+        });
+        throw new Error(`Draft version ${draftId}/${versionId} not found`);
+      }
+
       logger.error("Failed to save document snapshot", {
         draftId,
+        versionId,
         checksum,
         error: (error as Error).message,
+        status: axiosError.response?.status,
       });
       throw new Error(
         `Failed to save document snapshot: ${(error as Error).message}`
