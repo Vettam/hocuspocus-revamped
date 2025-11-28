@@ -135,9 +135,16 @@ export class DocumentService {
         return;
       }
 
+      // A temp copy of yDoc is made to delete all non-persistent 
+      // data before saving, like metadata and garbage collection info.
+      // This ensures only the actual document content is saved.
+      const tempYDoc = new Y.Doc();
+      const stateVector = Y.encodeStateAsUpdate(yDoc);
+      Y.applyUpdate(tempYDoc, stateVector);
+
       const draftId = this.extractDraftId(roomId);
       const versionId = this.extractVersionId(roomId);
-      const content = yDocToJSON(yDoc, schema, "default");
+      const content = yDocToJSON(tempYDoc, schema, "default");
       const checksum = this.calculateChecksum(content);
 
       await vettamAPI.saveDocumentSnapshot(
@@ -147,8 +154,9 @@ export class DocumentService {
         checksum
       );
 
-      // Reset dirty flag
+      // Reset dirty flag and destroy temp doc
       this.dirtyFlags.set(roomId, false);
+      tempYDoc.destroy();
 
       logger.info("Document snapshot saved", { roomId, draftId, checksum });
     } catch (error) {

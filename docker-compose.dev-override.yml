@@ -1,7 +1,7 @@
 services:
   hocuspocus-backend:
     ports:
-      - 3000:3000
+      - ${EXPRESS_PORT}:${EXPRESS_PORT}
 
     labels:
       # Enable Traefik for this container
@@ -12,3 +12,11 @@ services:
       - "traefik.http.routers.vettam-api.entrypoints=web"
       - "traefik.http.routers.vettam-api.service=vettam-api"
       - "traefik.http.services.vettam-api.loadbalancer.server.port=3000"
+    develop:
+      watch:
+        - action: sync+restart
+          path: src/
+          target: /app/src/
+          ignore:
+            - node_modules/
+            - dist/
