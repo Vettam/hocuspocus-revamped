@@ -139,26 +139,33 @@ export class DocumentService {
       // data before saving, like metadata and garbage collection info.
       // This ensures only the actual document content is saved.
       const tempYDoc = new Y.Doc();
-      const stateVector = Y.encodeStateAsUpdate(yDoc);
-      Y.applyUpdate(tempYDoc, stateVector);
+      let draftId = "";
+      let checksum = "";
+      
+      try {
+        const stateVector = Y.encodeStateAsUpdate(yDoc);
+        Y.applyUpdate(tempYDoc, stateVector);
 
-      const draftId = this.extractDraftId(roomId);
-      const versionId = this.extractVersionId(roomId);
-      const content = yDocToJSON(tempYDoc, schema, "default");
-      const checksum = this.calculateChecksum(content);
+        draftId = this.extractDraftId(roomId);
+        const versionId = this.extractVersionId(roomId);
+        const content = yDocToJSON(tempYDoc, schema, "default");
+        checksum = this.calculateChecksum(content);
 
-      await vettamAPI.saveDocumentSnapshot(
-        draftId,
-        versionId,
-        content,
-        checksum
-      );
+        await vettamAPI.saveDocumentSnapshot(
+          draftId,
+          versionId,
+          content,
+          checksum
+        );
 
-      // Reset dirty flag and destroy temp doc
-      this.dirtyFlags.set(roomId, false);
-      tempYDoc.destroy();
-
-      logger.info("Document snapshot saved", { roomId, draftId, checksum });
+        // Reset dirty flag on successful save
+        this.dirtyFlags.set(roomId, false);
+        
+        logger.info("Document snapshot saved", { roomId, draftId, checksum });
+      } finally {
+        // Always destroy temp doc to prevent memory leak
+        tempYDoc.destroy();
+      }
     } catch (error) {
       logger.error("Failed to save document snapshot", {
         roomId,
