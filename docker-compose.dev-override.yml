@@ -11,7 +11,7 @@ services:
       - "traefik.http.routers.vettam-api.rule=Host(`collaboration.api.vettam.app.local`)"
       - "traefik.http.routers.vettam-api.entrypoints=web"
       - "traefik.http.routers.vettam-api.service=vettam-api"
-      - "traefik.http.services.vettam-api.loadbalancer.server.port=3000"
+      - "traefik.http.services.vettam-api.loadbalancer.server.port=${EXPRESS_PORT}"
     develop:
       watch:
         - action: sync+restart

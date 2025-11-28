@@ -241,11 +241,14 @@ export class VettamAPIService {
       // STEP 2: Upload directly to storage using signed URL
       logger.debug("Uploading to storage", { temp_path });
 
+      // Calculate timeout as 80% of expires_in to provide buffer before expiry
+      const uploadTimeout = (expires_in || 300) * 1000 * 0.8;
+
       const uploadResponse = await axios.put(signed_upload_url, content, {
         headers: {
           "Content-Type": "application/json",
         },
-        timeout: 4 * 60 * 1000, // 4 minutes (buffer before 5 min expiry)
+        timeout: uploadTimeout,
       });
 
       if (uploadResponse.status < 200 || uploadResponse.status >= 300) {
@@ -304,14 +307,6 @@ export class VettamAPIService {
       const axiosError = error as AxiosError;
       
       // Handle specific error cases
-      if (axiosError.response?.status === 204) {
-        logger.info("Document unchanged - no save needed", {
-          draftId,
-          versionId,
-        });
-        return;
-      }
-
       if (axiosError.response?.status === 400) {
         const errorData = axiosError.response.data as VettamAPIResponse;
         logger.error("Validation error during snapshot save", {
