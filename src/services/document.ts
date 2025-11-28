@@ -240,14 +240,8 @@ export class DocumentService {
         return;
       }
 
-      // Persist the document state to storage
-      await this.saveSnapshot(roomId);
-
-      logger.info("Document persisted to storage", {
-        roomId,
-      });
-
       // Unregister the document to free up resources
+      // removeDocument will handle saving the snapshot
       await instance.unloadDocument(document);
       await this.removeDocument(roomId);
       logger.info("Document unregistered and resources cleaned up", {
