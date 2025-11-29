@@ -3,8 +3,6 @@ import {
   VettamAPIResponse,
   AuthorizationRequest,
   RoomAccessAuthorizationResponse,
-  DocumentLoadRequest,
-  SignedURLResponse,
 } from "../types";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
@@ -88,41 +86,6 @@ export class VettamAPIService {
         error: (error as Error).message,
       });
       throw new Error(`Authorization failed: ${(error as Error).message}`);
-    }
-  }
-
-  /**
-   * Get a signed URL to load a document
-   */
-  async getDocumentLoadURL(
-    request: DocumentLoadRequest
-  ): Promise<SignedURLResponse> {
-    try {
-      logger.debug("Getting document load URL", request);
-
-      const response = await this.client.post<
-        VettamAPIResponse<SignedURLResponse>
-      >("/internal/drafts/${draft_id}/${version_id}/load/", request, {
-        headers: {
-          "api-key": this.getApiKey(),
-        },
-      });
-
-      if (response.data.status != "success" || !response.data.data) {
-        throw new Error(
-          response.data.error || "Failed to get document load URL"
-        );
-      }
-
-      return response.data.data;
-    } catch (error) {
-      logger.error("Failed to get document load URL", {
-        request,
-        error: (error as Error).message,
-      });
-      throw new Error(
-        `Failed to get document load URL: ${(error as Error).message}`
-      );
     }
   }
 

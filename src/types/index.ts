@@ -34,12 +34,6 @@ export interface VettamAPIResponse<T = any> {
   message?: string;
 }
 
-export interface DocumentLoadRequest {
-  documentId: string;
-  roomId: string;
-  userId: string;
-}
-
 export interface RoomPreloadRequest {
   mdFileUrl: string;
 }
@@ -57,12 +51,6 @@ export interface RoomAccessAuthorizationResponse {
   edit: boolean;
   user: User;
   room: Room;
-}
-
-export interface SignedURLResponse {
-  url: string;
-  expiresAt: Date;
-  method: "GET" | "POST" | "PUT";
 }
 
 // Hocuspocus specific types
