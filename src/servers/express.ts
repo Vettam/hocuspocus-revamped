@@ -26,6 +26,7 @@ import indexRouter from "../routes/index";
 import healthRouter from "../routes/health";
 import catchAllRouter from "../routes/catch-all";
 import stateRouter from "../routes/state";
+import changesetRouter from "../routes/changeset";
 import { Server } from "http";
 
 export class ExpressServer {
@@ -225,6 +226,9 @@ export class ExpressServer {
 
       // Load state routes
       this.app.use("/v1/state", stateRouter);
+
+      // Load changeset testing routes
+      this.app.use("/v1/changeset", changesetRouter);
 
       // Catch remaining
       this.app.use("*", catchAllRouter);

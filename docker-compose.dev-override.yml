@@ -14,7 +14,7 @@ services:
       - "traefik.http.services.vettam-api.loadbalancer.server.port=${EXPRESS_PORT}"
     develop:
       watch:
-        - action: sync+restart
+        - action: rebuild
           path: src/
           target: /app/src/
           ignore:
