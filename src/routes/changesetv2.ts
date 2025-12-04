@@ -96,7 +96,7 @@ router.post("/:draftId/:versionId/markdown", asyncHandler(async (req: Request, r
     const newPmDoc = schema.nodeFromJSON(newTiptapJson);
 
     // 5) Use prosemirror-recreate-steps to compute the diff
-    const transform = recreateTransform(existingPmDoc, newPmDoc, true, true);
+    const transform = recreateTransform(existingPmDoc, newPmDoc, false, false);
     
     // 6) Format the steps into a readable diff
     const diff = formatTransformSteps(transform, existingPmDoc, newPmDoc);
