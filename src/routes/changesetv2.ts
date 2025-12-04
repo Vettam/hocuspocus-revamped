@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { markdownToTiptapJson } from "../utils/converters/json-to-tiptap";
 import { jsonToYDoc, yDocToJSON } from "../utils/ydoc/converters";
 import { schema } from "../utils/ydoc/schema";
+import { recreateTransform } from "@manuscripts/prosemirror-recreate-steps";
 import { hocuspocusInstance } from "../services/hocuspocus-instance";
 import { logger } from "../config/logger";
 import { RegexMatcher } from "../utils/regex_matcher";
@@ -90,12 +91,20 @@ router.post("/:draftId/:versionId/markdown", asyncHandler(async (req: Request, r
     const newYDoc = new Y.Doc();
     jsonToYDoc(newTiptapJson, newYDoc, schema, fieldName);
 
-    // 4) Compute structural diff (node-level changes)
-    const structuralDiff = computeStructuralDiff(existingTiptapJson, newTiptapJson);
+    // 4) Create ProseMirror nodes from TipTap JSON
+    const existingPmDoc = schema.nodeFromJSON(existingTiptapJson);
+    const newPmDoc = schema.nodeFromJSON(newTiptapJson);
+
+    // 5) Use prosemirror-recreate-steps to compute the diff
+    const transform = recreateTransform(existingPmDoc, newPmDoc, true, true);
+    
+    // 6) Format the steps into a readable diff
+    const diff = formatTransformSteps(transform, existingPmDoc, newPmDoc);
 
     logger.info("Changeset computed successfully", {
       roomId,
-      structuralChanges: structuralDiff.changes.length,
+      totalSteps: transform.steps.length,
+      changes: diff.changes.length,
     });
 
     // Return changeset and new Y.Doc snapshot (Uint8Array as base64)
@@ -108,7 +117,7 @@ router.post("/:draftId/:versionId/markdown", asyncHandler(async (req: Request, r
     return res.status(200).json({
       success: true,
       roomId,
-      diff: structuralDiff,
+      diff,
       ydocSnapshot: stateBase64,
       existingTiptap: existingTiptapJson,
       newTiptap: newTiptapJson,
@@ -135,125 +144,60 @@ router.post("/:draftId/:versionId/markdown", asyncHandler(async (req: Request, r
 
 // ---------------------- Helper functions ----------------------
 
-// Compute structural differences between two TipTap JSON documents
-function computeStructuralDiff(oldDoc: any, newDoc: any): any {
+// Format ProseMirror Transform steps into readable diff
+function formatTransformSteps(transform: any, oldDoc: any, newDoc: any): any {
   const changes: any[] = [];
   
-  if (!oldDoc?.content || !newDoc?.content) {
-    return { changes: [], summary: "Invalid document structure" };
-  }
-
-  const oldContent = oldDoc.content;
-  const newContent = newDoc.content;
-  
-  // Use a more sophisticated comparison approach
-  let oldIndex = 0;
-  let newIndex = 0;
-
-  while (oldIndex < oldContent.length || newIndex < newContent.length) {
-    const oldNode = oldContent[oldIndex];
-    const newNode = newContent[newIndex];
-
-    if (!oldNode && newNode) {
-      // Node added at the end
-      changes.push({
-        type: "node_added",
-        position: newIndex,
-        node: newNode,
-        summary: `Added ${newNode.type}${extractText(newNode) ? `: "${extractText(newNode)}"` : ""}`
-      });
-      newIndex++;
-    } else if (oldNode && !newNode) {
-      // Node removed from the end
-      changes.push({
-        type: "node_removed",
-        position: oldIndex,
-        node: oldNode,
-        summary: `Removed ${oldNode.type}${extractText(oldNode) ? `: "${extractText(oldNode)}"` : ""}`
-      });
-      oldIndex++;
-    } else if (oldNode && newNode) {
-      // Both nodes exist - check if they match
-      const nodeChanges = compareNodes(oldNode, newNode, oldIndex);
-      
-      if (nodeChanges) {
-        // Nodes are different
-        if (nodeChanges.type === "node_type_changed") {
-          // Type changed - could be replace or actual type change
-          changes.push(nodeChanges);
-          oldIndex++;
-          newIndex++;
-        } else {
-          // Content modified
-          changes.push(nodeChanges);
-          oldIndex++;
-          newIndex++;
-        }
-      } else {
-        // Nodes are the same
-        oldIndex++;
-        newIndex++;
-      }
-    }
-  }
+  transform.steps.forEach((step: any, index: number) => {
+    const stepJSON = step.toJSON();
+    
+    changes.push({
+      index,
+      stepType: step.constructor.name,
+      step: stepJSON,
+      from: stepJSON.from,
+      to: stepJSON.to,
+      summary: formatStepSummary(step, oldDoc, newDoc),
+    });
+  });
 
   return {
     summary: {
+      totalSteps: transform.steps.length,
       totalChanges: changes.length,
-      types: changes.reduce((acc: any, change: any) => {
-        acc[change.type] = (acc[change.type] || 0) + 1;
-        return acc;
-      }, {})
     },
-    changes
+    steps: transform.steps.map((s: any) => s.toJSON()),
+    changes,
   };
 }
 
-function compareNodes(oldNode: any, newNode: any, position: number): any | null {
-  // Check if node type changed
-  if (oldNode.type !== newNode.type) {
-    return {
-      type: "node_type_changed",
-      position,
-      oldType: oldNode.type,
-      newType: newNode.type,
-      summary: `Changed from ${oldNode.type} to ${newNode.type}`
-    };
+function formatStepSummary(step: any, _oldDoc: any, _newDoc: any): string {
+  const stepType = step.constructor.name;
+  const json = step.toJSON();
+
+  switch (stepType) {
+    case "ReplaceStep":
+      if (json.slice?.content) {
+        const content = json.slice.content.map((n: any) => {
+          if (n.type === "text") return n.text;
+          return `[${n.type}]`;
+        }).join("");
+        return `Replace at ${json.from}-${json.to} with: ${content}`;
+      }
+      return `Delete at ${json.from}-${json.to}`;
+    
+    case "ReplaceAroundStep":
+      return `Replace around ${json.from}-${json.to}`;
+    
+    case "AddMarkStep":
+      return `Add mark ${json.mark?.type} at ${json.from}-${json.to}`;
+    
+    case "RemoveMarkStep":
+      return `Remove mark ${json.mark?.type} at ${json.from}-${json.to}`;
+    
+    default:
+      return `${stepType} at ${json.from || 0}-${json.to || 0}`;
   }
-
-  // Check attributes
-  const attrsChanged = JSON.stringify(oldNode.attrs) !== JSON.stringify(newNode.attrs);
-  
-  // Check content
-  const oldText = extractText(oldNode);
-  const newText = extractText(newNode);
-  const contentChanged = oldText !== newText;
-
-  if (attrsChanged || contentChanged) {
-    return {
-      type: "node_modified",
-      position,
-      nodeType: oldNode.type,
-      oldText,
-      newText,
-      oldAttrs: oldNode.attrs,
-      newAttrs: newNode.attrs,
-      summary: contentChanged 
-        ? `Modified ${oldNode.type}: "${oldText}" → "${newText}"`
-        : `Modified ${oldNode.type} attributes`
-    };
-  }
-
-  return null;
-}
-
-function extractText(node: any): string {
-  if (!node) return "";
-  if (node.text) return node.text;
-  if (node.content) {
-    return node.content.map((child: any) => extractText(child)).join("");
-  }
-  return "";
 }
 
 export default router;
