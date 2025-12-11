@@ -103,6 +103,7 @@ export class ExpressServer {
 
         // Register Hocuspocus's YDoc instance with our service
         // At this point, the document already has data loaded from onLoadDocument
+        // The register function will handle cleanup of any old listeners if this is a reconnection
         documentService.registerHocuspocusDocument(roomId, data.document);
 
         logger.info("Document registered with service", { roomId });

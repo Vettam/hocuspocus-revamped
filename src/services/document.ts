@@ -17,12 +17,31 @@ export class DocumentService {
    */
   registerHocuspocusDocument(roomId: string, yDoc: Y.Doc): void {
     logger.info("Registering Hocuspocus document", { roomId });
+    
+    // Check if document was already registered
+    const wasAlreadyRegistered = this.documents.has(roomId);
+    
+    if (wasAlreadyRegistered) {
+      logger.warn("Document already registered, clearing old listeners", { roomId });
+      // Get the old document and remove all update listeners
+      const oldDoc = this.documents.get(roomId);
+      if (oldDoc) {
+        // Remove all listeners by replacing the document
+        oldDoc.destroy();
+      }
+    }
+    
     this.documents.set(roomId, yDoc);
     this.dirtyFlags.set(roomId, false);
 
     // Set up document update listener
     yDoc.on("update", () => {
       this.onDocumentUpdate(roomId);
+    });
+    
+    logger.debug("Document registration complete", { 
+      roomId, 
+      wasAlreadyRegistered 
     });
   }
 
