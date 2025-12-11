@@ -3,6 +3,7 @@ import expressWebsockets from "express-ws";
 import helmet from "helmet";
 import { Hocuspocus } from "@hocuspocus/server";
 import { jwtVerify } from "jose";
+import * as Y from "yjs";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
@@ -51,7 +52,7 @@ export class ExpressServer {
       },
 
       // Document loading hook - Load document state from API
-      // Return a Y.Doc with data so Hocuspocus uses it directly
+      // Applies the loaded state to Hocuspocus's internal Y.Doc
       onLoadDocument: async (data) => {
         const roomId = data.context?.room_id || data.documentName;
         logger.info("onLoadDocument called for room", { roomId });
@@ -68,9 +69,18 @@ export class ExpressServer {
 
           logger.info("Document loaded successfully from API", { roomId });
 
-          // Return the loaded Y.Doc to Hocuspocus
-          // Hocuspocus will apply this state to its own document
-          return loadedYDoc;
+          // Apply the loaded state to Hocuspocus's Y.Doc (passed in data.document)
+          // This prevents double-loading of content
+          const stateVector = Y.encodeStateAsUpdate(loadedYDoc);
+          Y.applyUpdate(data.document, stateVector);
+          
+          // Destroy the temporary loaded Y.Doc to prevent memory leaks
+          loadedYDoc.destroy();
+          
+          logger.info("Document state applied to Hocuspocus document", { roomId });
+
+          // Return undefined - we've already applied the state to data.document
+          return undefined;
         } catch (error) {
           logger.warn("Failed to load document from API, starting with empty document", {
             roomId,
