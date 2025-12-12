@@ -71,3 +71,32 @@ test("getActiveDocuments returns all roomIds", (t) => {
   t.deepEqual(service.getActiveDocuments(), [roomId]);
 });
 
+test("registerHocuspocusDocument skips re-registration on reconnection", (t) => {
+  const service = new DocumentService();
+  const yDoc = new Y.Doc();
+  const roomId = createRoomId();
+  
+  // First registration
+  service.registerHocuspocusDocument(roomId, yDoc);
+  t.truthy(service["documents"].get(roomId));
+  t.is(service["dirtyFlags"].get(roomId), false);
+  
+  // Add some content to verify it doesn't get destroyed
+  const xmlFragment = yDoc.getXmlFragment("default");
+  const xmlText = new Y.XmlText();
+  xmlText.insert(0, "Test content");
+  xmlFragment.insert(0, [xmlText]);
+  
+  // Attempt to register again (simulating reconnection)
+  service.registerHocuspocusDocument(roomId, yDoc);
+  
+  // Verify document is still registered and not destroyed
+  t.truthy(service["documents"].get(roomId));
+  t.false(yDoc.isDestroyed);
+  
+  // Verify content is still intact
+  const retrievedFragment = yDoc.getXmlFragment("default");
+  const retrievedText = retrievedFragment.get(0) as Y.XmlText;
+  t.is(retrievedText.toString(), "Test content");
+});
+

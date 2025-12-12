@@ -12,6 +12,13 @@ export class DocumentService {
   private dirtyFlags: Map<string, boolean> = new Map();
 
   /**
+   * Check if a document is already registered
+   */
+  isDocumentRegistered(roomId: string): boolean {
+    return this.documents.has(roomId);
+  }
+
+  /**
    * Register a Hocuspocus document instance
    * This ensures we use the same YDoc instance that Hocuspocus manages
    */
@@ -22,15 +29,14 @@ export class DocumentService {
     const wasAlreadyRegistered = this.documents.has(roomId);
     
     if (wasAlreadyRegistered) {
-      logger.warn("Document already registered, clearing old listeners", { roomId });
-      // Get the old document and remove all update listeners
-      const oldDoc = this.documents.get(roomId);
-      if (oldDoc) {
-        // Remove all listeners by replacing the document
-        oldDoc.destroy();
-      }
+      logger.info("Document already registered (reconnection), skipping re-registration", { roomId });
+      // On reconnection, the document is already set up with listeners
+      // We should NOT destroy it or re-register it as that would cause issues
+      // Hocuspocus manages the document lifecycle, we just track it
+      return;
     }
     
+    // First-time registration
     this.documents.set(roomId, yDoc);
     this.dirtyFlags.set(roomId, false);
 
@@ -41,7 +47,7 @@ export class DocumentService {
     
     logger.debug("Document registration complete", { 
       roomId, 
-      wasAlreadyRegistered 
+      wasAlreadyRegistered: false 
     });
   }
 
