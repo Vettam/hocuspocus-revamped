@@ -4,13 +4,12 @@ import { Hocuspocus, Document as HocuspocusDocument } from "@hocuspocus/server";
 import { vettamAPI } from "./vettam-api";
 import { logger } from "../config/logger";
 import { RegexMatcher } from "../utils/regex_matcher";
-import { yDocToJSON } from "../utils/ydoc/converters";
-import { schema } from "../utils/ydoc/schema";
 
 export class DocumentService {
   private documents: Map<string, Y.Doc> = new Map();
   private dirtyFlags: Map<string, boolean> = new Map();
   private persistenceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private loadingPromises: Map<string, Promise<void>> = new Map();
   private readonly PERSISTENCE_DELAY_MS = 30000; // 30 seconds
 
   /**
@@ -63,37 +62,50 @@ export class DocumentService {
    * This is called by Hocuspocus after a document is created
    */
   async loadInitialStateFromAPI(roomId: string, yDoc: Y.Doc): Promise<void> {
-    try {
-      const draftId = this.extractDraftId(roomId);
-      const versionId = this.extractVersionId(roomId);
-
-      logger.info("Loading initial state from API", {
+    if (this.loadingPromises.has(roomId)) {
+      logger.info("Document loading already in progress, waiting...", {
         roomId,
-        draftId,
-        versionId,
       });
-
-      // Fetch the YDoc from the API
-      const loadedYDoc = await vettamAPI.loadDocumentFromDraft(
-        draftId,
-        versionId
-      );
-
-      // Apply the loaded state to the Hocuspocus YDoc
-      const stateVector = Y.encodeStateAsUpdate(loadedYDoc);
-      Y.applyUpdate(yDoc, stateVector);
-
-      logger.info("Initial state loaded successfully", { roomId });
-    } catch (error) {
-      logger.warn(
-        "Failed to load initial state from API, starting with empty document",
-        {
-          roomId,
-          error: (error as Error).message,
-        }
-      );
-      // If loading fails, the document remains empty (which is fine)
+      return this.loadingPromises.get(roomId);
     }
+
+    const loadPromise = (async () => {
+      try {
+        const draftId = this.extractDraftId(roomId);
+        const versionId = this.extractVersionId(roomId);
+
+        logger.info("Loading initial state from API", {
+          roomId,
+          draftId,
+          versionId,
+        });
+
+        // Fetch the binary update from the API
+        const update = await vettamAPI.loadDocumentFromDraft(
+          draftId,
+          versionId
+        );
+
+        // Apply the loaded state to the Hocuspocus YDoc
+        Y.applyUpdate(yDoc, update);
+
+        logger.info("Initial state loaded successfully", { roomId });
+      } catch (error) {
+        logger.warn(
+          "Failed to load initial state from API, starting with empty document",
+          {
+            roomId,
+            error: (error as Error).message,
+          }
+        );
+        // If loading fails, the document remains empty (which is fine)
+      } finally {
+        this.loadingPromises.delete(roomId);
+      }
+    })();
+
+    this.loadingPromises.set(roomId, loadPromise);
+    return loadPromise;
   }
 
   applyUpdate(roomId: string, update: Uint8Array): void {
@@ -167,20 +179,17 @@ export class DocumentService {
         return;
       }
 
-      // A temp copy of yDoc is made to delete all non-persistent
-      // data before saving, like metadata and garbage collection info.
-      // This ensures only the actual document content is saved.
-      const tempYDoc = new Y.Doc();
       let draftId = "";
       let checksum = "";
 
       try {
-        const stateVector = Y.encodeStateAsUpdate(yDoc);
-        Y.applyUpdate(tempYDoc, stateVector);
+        // Encode state as binary update
+        const update = Y.encodeStateAsUpdate(yDoc);
+        // Convert to Base64 string
+        const content = Buffer.from(update).toString("base64");
 
         draftId = this.extractDraftId(roomId);
         const versionId = this.extractVersionId(roomId);
-        const content = yDocToJSON(tempYDoc, schema, "default");
         checksum = this.calculateChecksum(content);
 
         await vettamAPI.saveDocumentSnapshot(
@@ -194,9 +203,8 @@ export class DocumentService {
         this.dirtyFlags.set(roomId, false);
 
         logger.info("Document snapshot saved", { roomId, draftId, checksum });
-      } finally {
-        // Always destroy temp doc to prevent memory leak
-        tempYDoc.destroy();
+      } catch (error) {
+        throw error;
       }
     } catch (error) {
       logger.error("Failed to save document snapshot", {
@@ -249,7 +257,7 @@ export class DocumentService {
         const yDoc = this.documents.get(roomId);
 
         if (!yDoc) {
-          logger.warn("No document found to persist after delay", { roomId });
+          logger.warn("[scheduleDelayedPersistence] No document found to persist after delay", { roomId });
           this.persistenceTimers.delete(roomId);
           return;
         }
@@ -336,7 +344,7 @@ export class DocumentService {
       const yDoc = this.documents.get(roomId);
 
       if (!yDoc) {
-        logger.warn("No document found to persist", { roomId });
+        logger.warn("[persistAndCleanupDocument] No document found to persist", { roomId });
         return;
       }
 
@@ -408,7 +416,7 @@ export class DocumentService {
       const yDoc = this.documents.get(roomId);
 
       if (!yDoc) {
-        logger.warn("No document found to persist", { roomId });
+        logger.warn("[persistAndCleanupDocumentImmediate] No document found to persist", { roomId });
         return;
       }
 
