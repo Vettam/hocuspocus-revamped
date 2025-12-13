@@ -10,7 +10,7 @@ export class DocumentService {
   private dirtyFlags: Map<string, boolean> = new Map();
   private persistenceTimers: Map<string, NodeJS.Timeout> = new Map();
   private loadingPromises: Map<string, Promise<void>> = new Map();
-  private readonly PERSISTENCE_DELAY_MS = 30000; // 30 seconds
+  private readonly PERSISTENCE_DELAY_MS = 2 * 60 * 1000; // 2 minutes
 
   /**
    * Check if a document is already registered
