@@ -60,12 +60,12 @@ export class ExpressServer {
         // If already registered, skip loading to prevent duplication
         if (documentService.isDocumentRegistered(roomId)) {
           logger.info(
-            "Document already registered in service, skipping load from API",
+            "Document already registered in service, returning existing instance",
             {
               roomId,
             }
           );
-          return undefined;
+          return documentService.getDocument(roomId);
         }
 
         // Use documentService to load initial state with locking
