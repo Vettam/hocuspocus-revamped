@@ -7,9 +7,6 @@ import {
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { createHash } from "node:crypto";
-import * as Y from "yjs";
-import { jsonToYDoc } from "../utils/ydoc/converters";
-import { schema } from "../utils/ydoc/schema";
 
 export class VettamAPIService {
   private client: AxiosInstance;
@@ -95,7 +92,7 @@ export class VettamAPIService {
   async loadDocumentFromDraft(
     draftId: string,
     versionId: string
-  ): Promise<Y.Doc> {
+  ): Promise<Uint8Array> {
     try {
       logger.debug("Loading document from draft", { draftId });
 
@@ -114,7 +111,9 @@ export class VettamAPIService {
       }
 
       // Fetch the document content from the signed URL
-      const contentResponse = await axios.get(response.data.data.url);
+      const contentResponse = await axios.get(response.data.data.url, {
+        responseType: "text",
+      });
       const content = contentResponse.data;
 
       logger.info("Document loaded from draft", {
@@ -122,10 +121,10 @@ export class VettamAPIService {
         contentLength: content.length,
       });
 
-      var doc = new Y.Doc();
-      jsonToYDoc(content, doc, schema);
+      // Convert Base64 string to Uint8Array
+      const binaryUpdate = new Uint8Array(Buffer.from(content, "base64"));
 
-      return doc;
+      return binaryUpdate;
     } catch (error) {
       logger.error("Failed to load document from draft", {
         draftId,
@@ -209,7 +208,7 @@ export class VettamAPIService {
 
       const uploadResponse = await axios.put(signed_upload_url, content, {
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "text/plain",
         },
         timeout: uploadTimeout,
       });
