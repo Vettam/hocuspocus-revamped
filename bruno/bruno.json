@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "hocuspocus-backend",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

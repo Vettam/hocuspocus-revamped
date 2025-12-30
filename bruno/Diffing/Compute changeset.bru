@@ -1,0 +1,35 @@
+meta {
+  name: Compute changeset
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{collab_server_domain}}/v2/changeset/:draft_id/:draft_version_id/markdown
+  body: json
+  auth: inherit
+}
+
+params:path {
+  draft_version_id: 486fdc32-9458-48f3-b824-45c3729ce6be
+  draft_id: 147efe3b-08f0-4621-a0ea-584a31e13622
+}
+
+headers {
+  x-api-key: {{internal_api_key}}
+}
+
+body:json {
+  {
+    "markdown": "# New Thing\nThis is an important paragraph.\n\n- Bp 1\n- Bp 3"
+  }
+}
+
+vars:pre-request {
+  draft_id: 147efe3b-08f0-4621-a0ea-584a31e13622
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

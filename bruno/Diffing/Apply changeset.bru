@@ -1,0 +1,74 @@
+meta {
+  name: Apply changeset
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{collab_server_domain}}/v2/changeset/:draft_id/:draft_version_id/apply
+  body: json
+  auth: inherit
+}
+
+params:path {
+  draft_version_id: 486fdc32-9458-48f3-b824-45c3729ce6be
+  draft_id: 147efe3b-08f0-4621-a0ea-584a31e13622
+}
+
+body:json {
+  {
+    "diff": {
+        "steps": [
+        {
+          "stepType": "replace",
+          "from": 5,
+          "to": 6,
+          "slice": {
+            "content": [
+              {
+                "type": "text",
+                "text": "T"
+              }
+            ]
+          }
+        },
+        {
+          "stepType": "replace",
+          "from": 8,
+          "to": 9,
+          "slice": {
+            "content": [
+              {
+                "type": "text",
+                "text": "ng"
+              }
+            ]
+          }
+        },
+        {
+          "stepType": "replace",
+          "from": 58,
+          "to": 60,
+          "slice": {
+            "content": [
+              {
+                "type": "text",
+                "text": "3"
+              }
+            ]
+          }
+        },
+        {
+          "stepType": "replace",
+          "from": 62,
+          "to": 64
+        }
+      ]
+    }
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

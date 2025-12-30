@@ -1,0 +1,25 @@
+vars:pre-request {
+  collab_server_domain: http://localhost:3001
+}
+
+script:pre-request {
+  var key = bru.getEnvVar('internal_api_key_secret');
+  if (key == undefined) {
+    return;
+  }
+  
+  var crypto = require('crypto-js');
+  
+  // Get current date in YYYY-MM-DD format
+  var date = new Date().toISOString().slice(0, 10); // e.g. "2025-10-31"
+  
+  // Combine key and date
+  var input = date + key;
+  
+  // Create SHA256 hash
+  var hash = crypto.SHA256(input).toString(crypto.enc.Hex);
+  
+  bru.setEnvVar('internal_api_key', hash)
+  req.headers['x-api-key'] = hash;
+  
+}

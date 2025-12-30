@@ -28,6 +28,7 @@ import catchAllRouter from "../routes/catch-all";
 import stateRouter from "../routes/state";
 import changesetRouter from "../routes/changeset";
 import changesetV2Router from "../routes/changesetv2";
+import applyRouter from "../routes/changeset/apply";
 import { Server } from "http";
 
 export class ExpressServer {
@@ -225,6 +226,9 @@ export class ExpressServer {
       this.app.use("/v1/changeset", changesetRouter);
       // Load new v2 changeset route for markdown->ydoc->changeset
       this.app.use("/v2/changeset", changesetV2Router);
+
+      // Load apply changes route
+      this.app.use("/v2/changeset", applyRouter);
 
       // Catch remaining
       this.app.use("*", catchAllRouter);
