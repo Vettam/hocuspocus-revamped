@@ -53,34 +53,26 @@ export class ExpressServer {
       },
 
       // Document loading hook - Load document state from API
-      // Return a Y.Doc with data so Hocuspocus uses it directly
+      // Applies the loaded state to Hocuspocus's internal Y.Doc
       onLoadDocument: async (data) => {
         const roomId = data.context?.room_id || data.documentName;
         logger.info("onLoadDocument called for room", { roomId });
 
-        try {
-          // Extract draftId and versionId from roomId
-          const draftId = documentService.extractDraftId(roomId);
-          const versionId = documentService.extractVersionId(roomId);
-
-          logger.info("Loading document from API", { roomId, draftId, versionId });
-
-          // Load the Y.Doc from the Vettam API
-          const loadedYDoc = await vettamAPI.loadDocumentFromDraft(draftId, versionId);
-
-          logger.info("Document loaded successfully from API", { roomId });
-
-          // Return the loaded Y.Doc to Hocuspocus
-          // Hocuspocus will apply this state to its own document
-          return loadedYDoc;
-        } catch (error) {
-          logger.warn("Failed to load document from API, starting with empty document", {
-            roomId,
-            error: (error as Error).message,
-          });
-          // Return undefined to start with an empty document
-          return undefined;
+        // Check if document is already registered in documentService (reconnection scenario)
+        // If already registered, skip loading to prevent duplication
+        if (documentService.isDocumentRegistered(roomId)) {
+          logger.info(
+            "Document already registered in service, returning existing instance",
+            {
+              roomId,
+            }
+          );
+          return documentService.getDocument(roomId);
         }
+
+        // Use documentService to load initial state with locking
+        await documentService.loadInitialStateFromAPI(roomId, data.document);
+        return undefined;
       },
 
       // Document creation hook
@@ -99,15 +91,16 @@ export class ExpressServer {
       afterLoadDocument: async (data) => {
         const roomId = data.context?.room_id || data.documentName;
 
-        logger.info("afterLoadDocument called, registering document", {
+        logger.info("afterLoadDocument called", {
           roomId,
         });
 
         // Register Hocuspocus's YDoc instance with our service
         // At this point, the document already has data loaded from onLoadDocument
+        // On reconnection, registerHocuspocusDocument will skip re-registration
         documentService.registerHocuspocusDocument(roomId, data.document);
 
-        logger.info("Document registered with service", { roomId });
+        logger.debug("afterLoadDocument complete", { roomId });
       },
 
       // Connection closed hook
@@ -295,7 +288,7 @@ export class ExpressServer {
       try {
         const host = serverConfig.host.bindHost;
         const port = serverConfig.port.express;
-        
+
         this.server = this.app.listen(port, host, () => {
           logger.info(
             `Express server with WebSocket started on ${host}:${port}`
