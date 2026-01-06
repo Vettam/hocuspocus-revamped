@@ -31,8 +31,7 @@ export const serverConfig: ServerConfig = {
     timeout: parseInt(process.env.VETTAM_API_TIMEOUT || "30000", 10),
   },
   jwt: {
-    secret: process.env.JWT_SECRET!,
-    algorithm: process.env.JWT_ALGORITHM || "HS256",
+    jwksUrl: `${process.env.JWT_ISSUER}/.well-known/jwks.json`,
     audience: process.env.JWT_AUDIENCE || "authenticated",
     issuer: process.env.JWT_ISSUER!,
   },
@@ -43,7 +42,6 @@ export const isDevelopment = process.env.DEBUG === "true";
 // Validate required environment variables
 export function validateConfig(): void {
   const requiredVars = [
-    "JWT_SECRET",
     "VETTAM_API_URL",
     "VETTAM_API_KEY",
     "JWT_ISSUER",
@@ -58,13 +56,6 @@ export function validateConfig(): void {
     );
   }
 
-  // Validate JWT secret strength
-  const jwtSecret = process.env.JWT_SECRET!;
-  if (jwtSecret.length < 32) {
-    throw new Error(
-      "JWT_SECRET must be at least 32 characters long for security"
-    );
-  }
 
   // Validate ports are valid numbers
   const expressPort = parseInt(process.env.EXPRESS_PORT || "3000", 10);

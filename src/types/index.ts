@@ -87,8 +87,7 @@ export interface ServerConfig {
     timeout: number;
   };
   jwt: {
-    secret: string;
-    algorithm: string;
+    jwksUrl: string;
     audience: string;
     issuer: string;
   };

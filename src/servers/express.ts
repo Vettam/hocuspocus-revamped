@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from "express";
 import expressWebsockets from "express-ws";
 import helmet from "helmet";
 import { Hocuspocus } from "@hocuspocus/server";
-import { jwtVerify } from "jose";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 import { serverConfig } from "../config";
 import { logger } from "../config/logger";
 import { vettamAPI } from "../services/vettam-api";
@@ -27,6 +27,10 @@ import healthRouter from "../routes/health";
 import catchAllRouter from "../routes/catch-all";
 import stateRouter from "../routes/state";
 import { Server } from "http";
+
+
+// Create JWKS function that fetches public keys from the JWKS endpoint
+const JWKS = createRemoteJWKSet(new URL(serverConfig.jwt.jwksUrl));
 
 export class ExpressServer {
   private app: expressWebsockets.Application; // Express app with WebSocket support
@@ -348,9 +352,7 @@ export class ExpressServer {
 
     try {
       // Verify JWT token
-      const secret = new TextEncoder().encode(serverConfig.jwt.secret);
-      const { payload } = await jwtVerify(token, secret, {
-        algorithms: [serverConfig.jwt.algorithm],
+      const { payload } = await jwtVerify(token, JWKS, {
         audience: serverConfig.jwt.audience,
         issuer: serverConfig.jwt.issuer,
       });

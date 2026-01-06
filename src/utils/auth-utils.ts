@@ -1,6 +1,9 @@
 import { Request } from "express";
-import { jwtVerify } from "jose";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 import { serverConfig } from "../config";
+
+// Create JWKS function that fetches public keys from the JWKS endpoint
+const JWKS = createRemoteJWKSet(new URL(serverConfig.jwt.jwksUrl));
 
 /**
  * Extract JWT token from request headers or query parameters
@@ -22,9 +25,7 @@ export function extractJWTFromRequest(req: Request): string | null {
  */
 export async function getUserIdFromJWT(token: string): Promise<string | null> {
   try {
-    const secret = new TextEncoder().encode(serverConfig.jwt.secret);
-    const { payload } = await jwtVerify(token, secret, {
-      algorithms: [serverConfig.jwt.algorithm],
+    const { payload } = await jwtVerify(token, JWKS, {
       audience: serverConfig.jwt.audience,
       issuer: serverConfig.jwt.issuer,
     });
