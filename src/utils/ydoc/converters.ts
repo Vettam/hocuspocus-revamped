@@ -209,15 +209,33 @@ function sanitizeAttributes(
       if (typeof attrs.level === "number") {
         sanitized.level = Math.max(1, Math.min(6, attrs.level));
       }
+      if (attrs.textAlign && ["left", "center", "right", "justify"].includes(String(attrs.textAlign))) {
+        sanitized.textAlign = attrs.textAlign;
+      }
+      if (typeof attrs.fontFamily === "string" && attrs.fontFamily.length > 0) {
+        sanitized.fontFamily = attrs.fontFamily;
+      }
+      if (typeof attrs.fontSize === "number" && attrs.fontSize > 0) {
+        sanitized.fontSize = attrs.fontSize;
+      }
       break;
 
-    // Paragraph with alignment
+    // Paragraph with alignment and formatting
     case "paragraph":
-      if (
-        attrs.textAlign &&
-        ["left", "center", "right", "justify"].includes(String(attrs.textAlign))
-      ) {
+      if (attrs.textAlign && ["left", "center", "right", "justify"].includes(String(attrs.textAlign))) {
         sanitized.textAlign = attrs.textAlign;
+      }
+      if (typeof attrs.fontFamily === "string" && attrs.fontFamily.length > 0) {
+        sanitized.fontFamily = attrs.fontFamily;
+      }
+      if (typeof attrs.fontSize === "number" && attrs.fontSize > 0) {
+        sanitized.fontSize = attrs.fontSize;
+      }
+      if (typeof attrs.marginTop === "number") {
+        sanitized.marginTop = attrs.marginTop;
+      }
+      if (typeof attrs.marginBottom === "number") {
+        sanitized.marginBottom = attrs.marginBottom;
       }
       break;
 
