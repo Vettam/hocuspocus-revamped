@@ -8,7 +8,13 @@ const schema = new Schema({
     paragraph: {
       group: "block",
       content: "inline*",
-      attrs: { textAlign: { default: null } },
+      attrs: {
+        textAlign: { default: null },
+        fontFamily: { default: "Times New Roman" },
+        fontSize: { default: 12 },
+        marginTop: { default: null },
+        marginBottom: { default: null },
+      },
       parseDOM: [{ tag: "p" }],
       toDOM: () => ["p", 0],
     },
@@ -18,7 +24,12 @@ const schema = new Schema({
     heading: {
       group: "block",
       content: "inline*",
-      attrs: { level: { default: 1 } },
+      attrs: {
+        level: { default: 1 },
+        textAlign: { default: null },
+        fontFamily: { default: "Times New Roman" },
+        fontSize: { default: 12 },
+      },
       parseDOM: [
         { tag: "h1", attrs: { level: 1 } },
         { tag: "h2", attrs: { level: 2 } },

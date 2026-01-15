@@ -15,10 +15,14 @@ const stateRouter = Router();
 
 /**
  * GET /room/:draftId/:versionId/state
- * Get markdown content of room's YDoc (YDoc -> JSON -> Markdown)
+ * Get content of room's YDoc
+ * 
+ * Query params:
+ *   - content_type: "markdown" (default) | "tiptap"
  */
 stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, res: Response) => {
   const { draftId, versionId } = req.params;
+  const contentType = req.query.content_type === "tiptap" ? "tiptap" : "markdown";
 
   if (!draftId || typeof draftId !== 'string') {
     throw ErrorFactory.validation("Draft ID is required and must be a valid string");
@@ -39,7 +43,7 @@ stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, 
   // Construct roomId from draftId and versionId
   const roomId = `${draftId}:${versionId}`;
 
-  logger.info("Getting room state as markdown", { roomId, draftId, versionId });
+  logger.info("Getting room state", { roomId, draftId, versionId, contentType });
 
   // Get Hocuspocus instance
   const hocuspocus = hocuspocusInstance.getInstance();
@@ -66,21 +70,32 @@ stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, 
       jsonSize: tiptapJsonString.length,
     });
 
-    // Convert TipTap JSON to markdown
-    const markdownContent = tiptapJsonToMarkdown(tiptapJson);
+    if (contentType === "tiptap") {
+      // Return TipTap JSON directly
+      return res.status(200).json({
+        success: true,
+        roomId,
+        contentType: "tiptap",
+        content: tiptapJson,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      // Convert TipTap JSON to markdown (existing behavior)
+      const markdownContent = tiptapJsonToMarkdown(tiptapJson);
 
-    logger.info("TipTap JSON converted to markdown", {
-      roomId,
-      markdownLength: markdownContent.length,
-    });
+      logger.info("TipTap JSON converted to markdown", {
+        roomId,
+        markdownLength: markdownContent.length,
+      });
 
-    // Return the markdown content
-    return res.status(200).json({
-      success: true,
-      roomId,
-      content: markdownContent,
-      timestamp: new Date().toISOString(),
-    });
+      return res.status(200).json({
+        success: true,
+        roomId,
+        contentType: "markdown",
+        content: markdownContent,
+        timestamp: new Date().toISOString(),
+      });
+    }
   } catch (error) {
     if ((error as Error).message.includes("Document not found")) {
       throw ErrorFactory.notFound(`Document for room ${roomId}`);
@@ -99,11 +114,15 @@ stateRouter.get("/:draftId/:versionId/state", asyncHandler(async (req: Request, 
 
 /**
  * PATCH /room/:draftId/:versionId/state
- * Update room's YDoc with markdown content (Markdown -> JSON -> YDoc)
+ * Update room's YDoc with content (Markdown or TipTap JSON)
+ * 
+ * Request body:
+ *   - content: string (markdown or JSON-stringified TipTap doc)
+ *   - content_type: "markdown" (default) | "tiptap"
  */
 stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request, res: Response) => {
   const { draftId, versionId } = req.params;
-  const { content } = req.body;
+  const { content, content_type } = req.body;
 
   // Validation
   if (!draftId || typeof draftId !== 'string') {
@@ -126,13 +145,17 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
     throw ErrorFactory.validation("content is required and must be a string");
   }
 
+  // Determine content type (default to markdown for backward compatibility)
+  const contentType = content_type === "tiptap" ? "tiptap" : "markdown";
+
   // Construct roomId from draftId and versionId
   const roomId = `${draftId}:${versionId}`;
 
-  logger.info("Updating room state with markdown", {
+  logger.info("Updating room state", {
     roomId,
     draftId,
     versionId,
+    contentType,
     contentLength: content.length,
   });
 
@@ -145,13 +168,34 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
   });
 
   try {
-    // Convert markdown to TipTap JSON
-    const tiptapJson = markdownToTiptapJson(content);
+    let tiptapJson: any;
 
-    logger.info("Markdown converted to TipTap JSON", {
-      roomId,
-      tiptapJsonLength: JSON.stringify(tiptapJson).length,
-    });
+    if (contentType === "tiptap") {
+      // Parse TipTap JSON directly
+      try {
+        tiptapJson = JSON.parse(content);
+      } catch (parseError) {
+        throw ErrorFactory.validation("Invalid JSON format in content");
+      }
+
+      // Loose validation: only check for doc type
+      if (!tiptapJson || tiptapJson.type !== "doc") {
+        throw ErrorFactory.validation("TipTap JSON must have type 'doc'");
+      }
+
+      logger.info("TipTap JSON parsed directly", {
+        roomId,
+        contentNodes: tiptapJson.content?.length || 0,
+      });
+    } else {
+      // Existing markdown flow
+      tiptapJson = markdownToTiptapJson(content);
+
+      logger.info("Markdown converted to TipTap JSON", {
+        roomId,
+        tiptapJsonLength: JSON.stringify(tiptapJson).length,
+      });
+    }
 
     // Ensure document is loaded
     if (!directConnection.document) {
@@ -164,13 +208,14 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
       jsonToYDoc(JSON.stringify(tiptapJson), doc, schema, "default");
     });
 
-    logger.info("TipTap JSON loaded into YDoc and saved", { roomId });
+    logger.info("TipTap JSON loaded into YDoc and saved", { roomId, contentType });
 
     // Return success response
     return res.status(200).json({
       success: true,
       message: "Room state updated successfully",
       roomId,
+      contentType,
       contentLength: content.length,
       timestamp: new Date().toISOString(),
     });
@@ -181,8 +226,10 @@ stateRouter.patch("/:draftId/:versionId/state", asyncHandler(async (req: Request
       throw ErrorFactory.notFound(`Document for room ${roomId}`);
     } else if (errorMessage.includes("Invalid room ID format")) {
       throw ErrorFactory.validation("Invalid room ID format");
+    } else if (errorMessage.includes("Invalid JSON") || errorMessage.includes("type 'doc'")) {
+      throw ErrorFactory.validation(errorMessage);
     } else if (errorMessage.includes("Failed to convert")) {
-      throw ErrorFactory.validation("Failed to convert markdown content");
+      throw ErrorFactory.validation("Failed to convert content");
     } else {
       throw ErrorFactory.internal(`Failed to update room state: ${errorMessage}`);
     }
